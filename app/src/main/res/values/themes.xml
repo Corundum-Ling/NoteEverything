@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    themes.xml — 定义 App 的基础主题
+    这里设置为浅色主题且无标题栏，
+    因为 Compose 会自己画 UI，不需要系统 ActionBar。
+-->
+<resources>
+    <style name="Theme.NoteEverything" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>
