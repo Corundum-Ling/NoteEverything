@@ -31,9 +31,9 @@ import kotlinx.coroutines.launch
 
 // 三个主 Tab 的枚举
 enum class MainTab(val label: String) {
-    SOFTWARE("记录"),
-    NOTES("时间轴"),
-    TIME("时长")
+    SOFTWARE("软件"),
+    NOTES("笔记"),
+    TIME("统计")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -47,29 +47,26 @@ fun MainScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("NoteEverything") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                )
+                title = { Text("NoteEverything") }
             )
         },
         bottomBar = {
             NavigationBar {
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.Apps, contentDescription = null) },
-                    label = { Text("记录") },
+                    label = { Text("软件") },
                     selected = selectedTab == MainTab.SOFTWARE,
                     onClick = { selectedTab = MainTab.SOFTWARE }
                 )
                 NavigationBarItem(
                     icon = { Icon(Icons.Default.EditNote, contentDescription = null) },
-                    label = { Text("时间轴") },
+                    label = { Text("笔记") },
                     selected = selectedTab == MainTab.NOTES,
                     onClick = { selectedTab = MainTab.NOTES }
                 )
                 NavigationBarItem(
-                    icon = { Icon(Icons.Default.Timer, contentDescription = null) },
-                    label = { Text("时长") },
+                    icon = { Icon(Icons.Default.BarChart, contentDescription = null) },
+                    label = { Text("统计") },
                     selected = selectedTab == MainTab.TIME,
                     onClick = { selectedTab = MainTab.TIME }
                 )
@@ -78,38 +75,14 @@ fun MainScreen(
         floatingActionButton = {
             when (selectedTab) {
                 MainTab.SOFTWARE -> {
-                    // "记录" Tab：可选择添加软件或写随笔
-                    var showMenu by remember { mutableStateOf(false) }
                     var showAddSoftware by remember { mutableStateOf(false) }
 
                     Box {
-                        FloatingActionButton(onClick = { showMenu = true }) {
-                            Icon(Icons.Default.Add, contentDescription = "添加")
-                        }
-                        DropdownMenu(
-                            expanded = showMenu,
-                            onDismissRequest = { showMenu = false }
+                        FloatingActionButton(
+                            onClick = { showAddSoftware = true },
+                            shape = MaterialTheme.shapes.medium
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("添加软件") },
-                                onClick = {
-                                    showMenu = false
-                                    showAddSoftware = true
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Apps, contentDescription = null)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("写随笔") },
-                                onClick = {
-                                    showMenu = false
-                                    navController.navigate(Routes.NoteEditor.create())
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.EditNote, contentDescription = null)
-                                }
-                            )
+                            Icon(Icons.Default.Add, contentDescription = "添加软件")
                         }
                         if (showAddSoftware) {
                             AddSoftwareDialog(
@@ -120,12 +93,15 @@ fun MainScreen(
                     }
                 }
                 MainTab.NOTES -> {
-                    // "时间轴" Tab：只读浏览，无 FAB
+                    FloatingActionButton(
+                        onClick = { navController.navigate(Routes.NoteEditor.create()) },
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Icon(Icons.Default.Edit, contentDescription = "写笔记")
+                    }
                 }
                 MainTab.TIME -> {
-                    FloatingActionButton(onClick = { selectedTab = MainTab.SOFTWARE }) {
-                        Icon(Icons.Default.Timer, contentDescription = "开始计时")
-                    }
+                    // 统计 Tab：无 FAB
                 }
             }
         }
