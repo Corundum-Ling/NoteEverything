@@ -9,7 +9,7 @@ data class CategoryColor(
 )
 
 object CategoryColors {
-    val map = mapOf(
+    private val colorMap = mapOf(
         "游戏" to CategoryColor(
             primary = Color(0xFFFF9800),
             background = Color(0xFFFFF3E0),
@@ -38,19 +38,21 @@ object CategoryColors {
     )
 
     fun forCategory(category: String): CategoryColor =
-        map[category] ?: CategoryColor(
+        colorMap[category] ?: CategoryColor(
             primary = Color(0xFF757575),
             background = Color(0xFFF5F5F5),
             onBackground = Color(0xFF424242)
         )
 
+    private const val GRADIENT_DARKEN_FACTOR = 0.8f
+
     /** 根据分类色生成渐变起止色（用于头像背景） */
     fun gradientFor(category: String): Pair<Color, Color> {
-        val c = forCategory(category).primary
-        return c to Color(
-            red = c.red * 0.8f,
-            green = c.green * 0.8f,
-            blue = c.blue * 0.8f
+        val base = forCategory(category).primary
+        return base to Color(
+            red = base.red * GRADIENT_DARKEN_FACTOR,
+            green = base.green * GRADIENT_DARKEN_FACTOR,
+            blue = base.blue * GRADIENT_DARKEN_FACTOR
         )
     }
 }
