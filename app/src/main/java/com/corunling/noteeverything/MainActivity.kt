@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.core.view.WindowCompat
 import androidx.navigation.compose.rememberNavController
 import com.corunling.noteeverything.ui.navigation.NavGraph
 import com.corunling.noteeverything.ui.theme.NoteEverythingTheme
@@ -28,6 +29,10 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        // 浅色主题强制深色状态栏图标
+        WindowCompat.getInsetsController(window, window.decorView).apply {
+            isAppearanceLightStatusBars = true
+        }
         setContent {
             // NoteEverythingTheme：应用主题色、字体等样式
             NoteEverythingTheme {
