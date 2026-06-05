@@ -5,26 +5,36 @@
 
 package com.corunling.noteeverything.ui.software
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Apps
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.corunling.noteeverything.data.NoteEverythingRepository
 import com.corunling.noteeverything.data.entity.NoteEntity
+import com.corunling.noteeverything.ui.theme.CategoryColors
 import com.corunling.noteeverything.util.DateTimeUtils
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun SoftwareListScreen(
     repository: NoteEverythingRepository,
@@ -44,11 +54,25 @@ fun SoftwareListScreen(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "还没有添加软件\n点击右下角 + 开始",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(
+                    Icons.Default.Apps,
+                    contentDescription = null,
+                    modifier = Modifier.size(56.dp),
+                    tint = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    text = "还没有添加软件",
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    text = "添加软件后可以追踪时长、记录感想",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         return
     }
@@ -79,12 +103,17 @@ fun SoftwareListScreen(
                     label = { Text("全部") }
                 )
                 allCategories.forEach { cat ->
+                    val cc = CategoryColors.forCategory(cat)
                     FilterChip(
                         selected = selectedFilter == cat,
                         onClick = {
                             selectedFilter = if (selectedFilter == cat) null else cat
                         },
-                        label = { Text(cat) }
+                        label = { Text(cat) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = cc.background,
+                            selectedLabelColor = cc.onBackground
+                        )
                     )
                 }
             }
@@ -95,60 +124,115 @@ fun SoftwareListScreen(
             .filter { selectedFilter == null || it.key == selectedFilter }
             .forEach { (category, items) ->
                 item {
+                    val cc = CategoryColors.forCategory(category)
                     Text(
-                        text = category,
+                        text = "$category · ${items.size} 个",
                         style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary,
+                        color = cc.onBackground,
                         modifier = Modifier.padding(vertical = 4.dp)
                     )
                 }
                 items(items, key = { it.software.id }) { stat ->
                     var showDeleteDialog by remember { mutableStateOf(false) }
+                    var showMenu by remember { mutableStateOf(false) }
+
+                    val cc = CategoryColors.forCategory(stat.software.category)
+                    val (gradStart, gradEnd) = CategoryColors.gradientFor(stat.software.category)
 
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { onSoftwareClick(stat.software.id) },
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                            .combinedClickable(
+                                onClick = { onSoftwareClick(stat.software.id) },
+                                onLongClick = { showMenu = true }
+                            ),
+                        shape = RoundedCornerShape(16.dp),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                     ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 首字母头像
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        Brush.linearGradient(listOf(gradStart, gradEnd))
+                                    ),
+                                contentAlignment = Alignment.Center
                             ) {
+                                Text(
+                                    text = stat.software.name.take(1),
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 17.sp
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            // 名称 + 今日时长
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
                                     text = stat.software.name,
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold
                                 )
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        text = stat.software.platform,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.outline
-                                    )
-                                    IconButton(
-                                        onClick = { showDeleteDialog = true },
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Delete,
-                                            contentDescription = "删除",
-                                            modifier = Modifier.size(14.dp),
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                }
+                                Text(
+                                    text = "今日: ${DateTimeUtils.formatDuration(stat.todayDuration)}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = cc.onBackground
+                                )
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "今日: ${DateTimeUtils.formatDuration(stat.todayDuration)}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.secondary
+
+                            // 平台标签
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = cc.background
+                            ) {
+                                Text(
+                                    text = stat.software.platform,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = cc.onBackground
+                                )
+                            }
+
+                            // 右侧箭头
+                            Icon(
+                                Icons.Default.ChevronRight,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.outline
                             )
                         }
                     }
 
+                    // 长按弹出菜单
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("删除", color = MaterialTheme.colorScheme.error) },
+                            onClick = {
+                                showMenu = false
+                                showDeleteDialog = true
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
+                        )
+                    }
+
+                    // 删除确认对话框
                     if (showDeleteDialog) {
                         AlertDialog(
                             onDismissRequest = { showDeleteDialog = false },
