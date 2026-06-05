@@ -139,6 +139,7 @@ fun SoftwareListScreen(
                     val cc = CategoryColors.forCategory(stat.software.category)
                     val (gradStart, gradEnd) = CategoryColors.gradientFor(stat.software.category)
 
+                    Box {
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -255,6 +256,7 @@ fun SoftwareListScreen(
                                 }
                             }
                         )
+                    }
                     }
                 }
             }

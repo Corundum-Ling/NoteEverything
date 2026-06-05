@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -33,7 +32,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
+import android.widget.NumberPicker
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -375,18 +375,13 @@ private fun ManualTimeEntry(
     var date by remember { mutableStateOf(DateTimeUtils.today()) }
     var showDatePicker by remember { mutableStateOf(false) }
 
-    var startHInput by remember { mutableStateOf("") }
-    var startMInput by remember { mutableStateOf("") }
-    var endHInput by remember { mutableStateOf("") }
-    var endMInput by remember { mutableStateOf("") }
+    var startHour by remember { mutableStateOf(0) }
+    var startMinute by remember { mutableStateOf(0) }
+    var endHour by remember { mutableStateOf(0) }
+    var endMinute by remember { mutableStateOf(0) }
 
-    val startH = startHInput.toIntOrNull() ?: 0
-    val startM = startMInput.toIntOrNull() ?: 0
-    val endH = endHInput.toIntOrNull() ?: 0
-    val endM = endMInput.toIntOrNull() ?: 0
-
-    val startTotal = startH * 60 + startM
-    val endTotal = endH * 60 + endM
+    val startTotal = startHour * 60 + startMinute
+    val endTotal = endHour * 60 + endMinute
     val duration = endTotal - startTotal
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -403,32 +398,26 @@ private fun ManualTimeEntry(
         Text("开始时间",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary)
-        Spacer(modifier = Modifier.height(4.dp))
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
-                value = startHInput,
-                onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 2) startHInput = it },
-                modifier = Modifier.width(72.dp),
-                singleLine = true,
-                placeholder = { Text("时") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            NumberPickerView(
+                value = startHour,
+                onValueChange = { startHour = it },
+                range = 0..23,
+                label = "时",
+                modifier = Modifier.width(80.dp)
             )
-            Spacer(Modifier.width(4.dp))
-            Text("时", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.width(8.dp))
-            OutlinedTextField(
-                value = startMInput,
-                onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 2) startMInput = it },
-                modifier = Modifier.width(72.dp),
-                singleLine = true,
-                placeholder = { Text("分") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            Text(" : ",
+                style = MaterialTheme.typography.headlineSmall)
+            NumberPickerView(
+                value = startMinute,
+                onValueChange = { startMinute = it },
+                range = 0..59,
+                label = "分",
+                modifier = Modifier.width(80.dp)
             )
-            Spacer(Modifier.width(4.dp))
-            Text("分", style = MaterialTheme.typography.bodyMedium)
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -437,32 +426,26 @@ private fun ManualTimeEntry(
         Text("结束时间",
             style = MaterialTheme.typography.labelMedium,
             color = MaterialTheme.colorScheme.primary)
-        Spacer(modifier = Modifier.height(4.dp))
         Row(
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            OutlinedTextField(
-                value = endHInput,
-                onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 2) endHInput = it },
-                modifier = Modifier.width(72.dp),
-                singleLine = true,
-                placeholder = { Text("时") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            NumberPickerView(
+                value = endHour,
+                onValueChange = { endHour = it },
+                range = 0..23,
+                label = "时",
+                modifier = Modifier.width(80.dp)
             )
-            Spacer(Modifier.width(4.dp))
-            Text("时", style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.width(8.dp))
-            OutlinedTextField(
-                value = endMInput,
-                onValueChange = { if (it.all { c -> c.isDigit() } && it.length <= 2) endMInput = it },
-                modifier = Modifier.width(72.dp),
-                singleLine = true,
-                placeholder = { Text("分") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
+            Text(" : ",
+                style = MaterialTheme.typography.headlineSmall)
+            NumberPickerView(
+                value = endMinute,
+                onValueChange = { endMinute = it },
+                range = 0..59,
+                label = "分",
+                modifier = Modifier.width(80.dp)
             )
-            Spacer(Modifier.width(4.dp))
-            Text("分", style = MaterialTheme.typography.bodyMedium)
         }
 
         // 时长预览
@@ -492,8 +475,8 @@ private fun ManualTimeEntry(
                             source = "manual"
                         )
                     }
-                    startHInput = ""; startMInput = ""
-                    endHInput = ""; endMInput = ""
+                    startHour = 0; startMinute = 0
+                    endHour = 0; endMinute = 0
                     date = DateTimeUtils.today()
                 }
             },
@@ -665,6 +648,44 @@ private fun TimeRecordCard(
                 }
             )
         }
+    }
+}
+
+// ─── NumberPicker 转轮组件 ────────────────────────────────────
+@Composable
+fun NumberPickerView(
+    value: Int,
+    onValueChange: (Int) -> Unit,
+    range: IntRange,
+    label: String,
+    modifier: Modifier = Modifier
+) {
+    val isUpdating = remember { mutableStateOf(false) }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        AndroidView(
+            modifier = modifier.height(100.dp),
+            factory = { context ->
+                android.widget.NumberPicker(context).apply {
+                    minValue = range.first
+                    maxValue = range.last
+                    this.value = value
+                    setOnValueChangedListener { _, _, newVal ->
+                        if (!isUpdating.value) {
+                            onValueChange(newVal)
+                        }
+                    }
+                }
+            },
+            update = { picker ->
+                isUpdating.value = true
+                picker.value = value
+                isUpdating.value = false
+            }
+        )
+        Text(label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline)
     }
 }
 

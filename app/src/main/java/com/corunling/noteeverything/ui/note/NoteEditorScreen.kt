@@ -145,6 +145,9 @@ fun NoteEditorScreen(
                         Icon(Icons.Default.ArrowBack, contentDescription = "返回")
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                ),
                 actions = {
                     TextButton(
                         onClick = { save() },
@@ -176,6 +179,7 @@ fun NoteEditorScreen(
             // ── 关联软件下拉 ──
             item {
                 var showSoftwarePicker by remember { mutableStateOf(false) }
+                Box {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -238,6 +242,7 @@ fun NoteEditorScreen(
                                 linksInitialized = false
                             }
                         )
+                    }
                     }
                 }
             }
