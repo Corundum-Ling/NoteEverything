@@ -9,19 +9,28 @@
 
 package com.corunling.noteeverything.ui.note
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.corunling.noteeverything.data.NoteEverythingRepository
 import com.corunling.noteeverything.data.entity.TimeRecordEntity
+import com.corunling.noteeverything.ui.theme.CategoryColors
 import com.corunling.noteeverything.util.DateTimeUtils
 import kotlinx.coroutines.launch
 
@@ -139,8 +148,20 @@ fun NoteEditorScreen(
                 actions = {
                     TextButton(
                         onClick = { save() },
-                        enabled = content.isNotBlank() && !isSaving
-                    ) { Text(if (isSaving) "保存中..." else "保存") }
+                        enabled = content.isNotBlank() && !isSaving,
+                        shape = RoundedCornerShape(16.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.primary
+                        ) {
+                            Text(
+                                if (isSaving) "保存中..." else "保存",
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
                 }
             )
         }
@@ -154,44 +175,69 @@ fun NoteEditorScreen(
         ) {
             // ── 关联软件下拉 ──
             item {
-                var pickerExpanded by remember { mutableStateOf(false) }
-                ExposedDropdownMenuBox(
-                    expanded = pickerExpanded,
-                    onExpandedChange = { pickerExpanded = it }
+                var showSoftwarePicker by remember { mutableStateOf(false) }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (selectedSoftware != null)
+                        CategoryColors.forCategory(selectedSoftware.category).background
+                    else MaterialTheme.colorScheme.surfaceVariant,
+                    onClick = { showSoftwarePicker = true }
                 ) {
-                    OutlinedTextField(
-                        value = selectedSoftware?.name ?: "自由随笔（不关联软件）",
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("关联软件") },
-                        trailingIcon = {
-                            ExposedDropdownMenuDefaults.TrailingIcon(expanded = pickerExpanded)
-                        },
-                        modifier = Modifier.fillMaxWidth().menuAnchor()
-                    )
-                    ExposedDropdownMenu(
-                        expanded = pickerExpanded,
-                        onDismissRequest = { pickerExpanded = false }
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        if (selectedSoftware != null) {
+                            val (g1, g2) = CategoryColors.gradientFor(selectedSoftware.category)
+                            Box(
+                                modifier = Modifier.size(24.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Brush.linearGradient(listOf(g1, g2))),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    selectedSoftware.name.take(1),
+                                    color = Color.White,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                selectedSoftware.name,
+                                fontWeight = FontWeight.Bold,
+                                color = CategoryColors.forCategory(selectedSoftware.category).onBackground
+                            )
+                        } else {
+                            Text("自由随笔（不关联软件）", color = MaterialTheme.colorScheme.outline)
+                        }
+                        Spacer(Modifier.weight(1f))
+                        Icon(Icons.Default.ArrowDropDown, null, tint = MaterialTheme.colorScheme.outline)
+                    }
+                }
+                DropdownMenu(
+                    expanded = showSoftwarePicker,
+                    onDismissRequest = { showSoftwarePicker = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text("自由随笔（不关联软件）") },
+                        onClick = {
+                            selectedSoftwareId = null
+                            showSoftwarePicker = false
+                            linksInitialized = false
+                            linkedRecordIds = emptySet()
+                        }
+                    )
+                    allSoftware.forEach { sw ->
                         DropdownMenuItem(
-                            text = { Text("自由随笔（不关联软件）") },
+                            text = { Text("${sw.name} (${sw.platform})") },
                             onClick = {
-                                selectedSoftwareId = null
-                                pickerExpanded = false
+                                selectedSoftwareId = sw.id
+                                showSoftwarePicker = false
                                 linksInitialized = false
-                                linkedRecordIds = emptySet()
                             }
                         )
-                        allSoftware.forEach { sw ->
-                            DropdownMenuItem(
-                                text = { Text("${sw.name} (${sw.platform})") },
-                                onClick = {
-                                    selectedSoftwareId = sw.id
-                                    pickerExpanded = false
-                                    linksInitialized = false
-                                }
-                            )
-                        }
                     }
                 }
             }
@@ -205,51 +251,62 @@ fun NoteEditorScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = 200.dp),
-                    maxLines = Int.MAX_VALUE
+                    maxLines = Int.MAX_VALUE,
+                    shape = RoundedCornerShape(12.dp)
                 )
             }
 
             // ── 时长关联（仅关联了软件时显示） ──
             if (selectedSoftwareId != null && todayRecords.isNotEmpty()) {
                 item {
-                    Text(
-                        "关联时长记录",
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        "勾选需要关联的时长记录",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
+                    Surface(shape = RoundedCornerShape(10.dp), color = Color(0xFFFFF8E1)) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Text(
+                                "关联今日时长",
+                                color = Color(0xFFE65100),
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            Text(
+                                "勾选需要关联的时长记录",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
                 }
 
                 items(todayRecords, key = { "link_${it.id}" }) { record ->
                     val isChecked = record.id in linkedRecordIds
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = if (isChecked) Color(0xFFFFF8E1)
+                        else MaterialTheme.colorScheme.surface
                     ) {
-                        Checkbox(
-                            checked = isChecked,
-                            onCheckedChange = { checked ->
-                                linkedRecordIds = if (checked) {
-                                    linkedRecordIds + record.id
-                                } else {
-                                    linkedRecordIds - record.id
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = isChecked,
+                                onCheckedChange = { checked ->
+                                    linkedRecordIds = if (checked) {
+                                        linkedRecordIds + record.id
+                                    } else {
+                                        linkedRecordIds - record.id
+                                    }
                                 }
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "${DateTimeUtils.formatTimestamp(record.startTime)} - ${DateTimeUtils.formatTimestamp(record.endTime)}",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                                Text(
+                                    DateTimeUtils.formatDuration(record.durationMinutes),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
                             }
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "${DateTimeUtils.formatTimestamp(record.startTime)} - ${DateTimeUtils.formatTimestamp(record.endTime)}",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                DateTimeUtils.formatDuration(record.durationMinutes),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
                         }
                     }
                 }
