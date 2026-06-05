@@ -2,7 +2,7 @@
 
 > 以软件/游戏为锚点的个人记录工具 — 绑定到每个 App 的感想笔记 + 时长追踪
 
-[![Alpha](https://img.shields.io/badge/status-alpha-orange)](https://github.com/linglingyunb/NoteEverything)
+[![Alpha](https://img.shields.io/badge/status-alpha-orange)](https://github.com/Corundum-Ling/NoteEverything)
 [![Kotlin](https://img.shields.io/badge/kotlin-1.9.24-blue)](https://kotlinlang.org)
 [![Compose](https://img.shields.io/badge/compose-BOM%202024.06-4285F4)](https://developer.android.com/jetpack/compose)
 
@@ -11,6 +11,8 @@
 玩游戏后想记感想？想知道这周在每个游戏上花了多少时间？
 
 NoteEverything 不是又一本通用笔记软件。它以**你在用什么软件**来组织信息——每条笔记和时长记录都绑定到具体的软件/游戏条目，形成以 App 为维度的记录体系。
+
+同时，这个项目也是通过 **Vibecoding（AI 辅助编程）** 间接学习 Android 开发的实践：描述需求 → AI 生成代码 → 阅读理解 → 逐步上手，产品本身即是学习素材。
 
 ## 功能
 
