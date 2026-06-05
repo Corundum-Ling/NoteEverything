@@ -9,3 +9,9 @@
 .cxx
 local.properties
 /app/build
+
+# GitHub 文档 — 仅保留设计文档和实施计划
+/docs/*
+!/docs/设计文档.md
+!/docs/实施计划.md
+/app/release/
