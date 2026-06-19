@@ -16,6 +16,8 @@
 package com.corunling.noteeverything.ui.editor
 
 import android.annotation.SuppressLint
+import android.view.MotionEvent
+import android.view.ViewGroup
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -65,6 +67,13 @@ class RichTextEditorState {
         }
     }
 
+    /** 执行任意 JS（用于自定义格式化） */
+    fun evalJs(js: String) {
+        executeWhenReady {
+            webView?.evaluateJavascript(js, null)
+        }
+    }
+
     /** 插入 Base64 图片 */
     fun insertImageBase64(base64: String, fileName: String? = null) {
         executeWhenReady {
@@ -106,6 +115,13 @@ class RichTextEditorState {
         }
     }
 
+    /** 查询格式状态 */
+    fun queryFormatState() {
+        executeWhenReady {
+            webView?.evaluateJavascript("queryFormatState()", null)
+        }
+    }
+
     /** 设置编辑器只读/可编辑 */
     fun setReadOnly(readOnly: Boolean) {
         executeWhenReady {
@@ -144,6 +160,7 @@ fun RichTextEditor(
     state: RichTextEditorState = rememberRichTextEditorState(),
     initialContent: String = "",
     onContentChanged: (String) -> Unit = {},
+    onFormatChanged: ((String) -> Unit)? = null,
     onTap: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -167,6 +184,7 @@ fun RichTextEditor(
         modifier = modifier,
         factory = { context ->
             WebView(context).apply {
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
                 // ── 基础配置 ──
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
@@ -178,12 +196,13 @@ fun RichTextEditor(
                 isHorizontalScrollBarEnabled = false
 
                 // ── 触摸收起面板 ──
-                setOnTouchListener { _, _ -> onTap(); false }
+                setOnTouchListener { _, event -> if (event.action == MotionEvent.ACTION_DOWN) onTap(); false }
 
                 // ── JS Bridge ──
-                val bridge = RichEditorBridge { html ->
-                    onContentChanged(html)
-                }
+                val bridge = RichEditorBridge(
+                    onContentChanged = { html -> onContentChanged(html) },
+                    onFormatState = { json -> onFormatChanged?.invoke(json) }
+                )
                 addJavascriptInterface(bridge, "RichEditorBridge")
 
                 // ── WebViewClient ──
