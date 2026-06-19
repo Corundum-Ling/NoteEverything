@@ -15,6 +15,7 @@
 package com.corunling.noteeverything.ui.software
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
@@ -38,6 +39,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import android.graphics.BitmapFactory
+import android.text.Html
+import android.util.Base64
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import androidx.navigation.NavHostController
 import com.corunling.noteeverything.data.NoteEverythingRepository
 import com.corunling.noteeverything.data.entity.NoteEntity
@@ -540,8 +547,11 @@ private fun NoteCard(
                     .background(catColor?.primary ?: Color.Gray)
             )
             Column(modifier = Modifier.padding(12.dp)) {
+                val plainText = remember(note) {
+                    Html.fromHtml(note.content, Html.FROM_HTML_MODE_COMPACT).toString()
+                }
                 Text(
-                    note.content,
+                    plainText,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
@@ -572,6 +582,8 @@ private fun NoteCard(
                     color = MaterialTheme.colorScheme.outline
                 )
             }
+            // 图片缩略图
+            NoteImageThumbnail(note.content)
         }
 
         DropdownMenu(
@@ -695,4 +707,41 @@ private fun formatElapsed(seconds: Long): String {
     val m = (seconds % 3600) / 60
     val s = seconds % 60
     return "%02d:%02d:%02d".format(h, m, s)
+}
+
+// ─── 图片缩略图组件 ──────────────────────────────────
+@Composable
+private fun NoteImageThumbnail(
+    htmlContent: String,
+    modifier: Modifier = Modifier
+) {
+    val imageSrc = remember(htmlContent) { extractFirstImageSrc(htmlContent) }
+    if (imageSrc == null) return
+
+    val bitmap = remember(imageSrc) {
+        try {
+            val base64Data = imageSrc.substringAfter("base64,")
+            val bytes = Base64.decode(base64Data, Base64.DEFAULT)
+            val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        } catch (e: Exception) { null }
+    }
+
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = null,
+            modifier = modifier
+                .padding(start = 8.dp, end = 8.dp, top = 8.dp)
+                .size(64.dp)
+                .clip(RoundedCornerShape(8.dp)),
+            contentScale = ContentScale.Crop
+        )
+    }
+}
+
+/** 从 HTML 中提取第一张图片的 src 属性值 */
+private fun extractFirstImageSrc(html: String): String? {
+    val regex = """src=["'](data:image/[^"']+)["']""".toRegex()
+    return regex.find(html)?.groupValues?.getOrNull(1)
 }

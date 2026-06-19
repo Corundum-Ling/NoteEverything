@@ -6,6 +6,7 @@
 package com.corunling.noteeverything.ui.note
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -32,6 +33,12 @@ import com.corunling.noteeverything.data.entity.TimeRecordEntity
 import com.corunling.noteeverything.ui.theme.CategoryColors
 import com.corunling.noteeverything.util.DateTimeUtils
 import kotlinx.coroutines.launch
+import android.graphics.BitmapFactory
+import android.text.Html
+import android.util.Base64
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -177,7 +184,10 @@ fun NoteListScreen(
         val filteredNotes = notes
             .let { list ->
                 if (searchQuery.isBlank()) list
-                else list.filter { it.content.contains(searchQuery, ignoreCase = true) }
+                else list.filter {
+                    val plain = Html.fromHtml(it.content, Html.FROM_HTML_MODE_COMPACT).toString()
+                    plain.contains(searchQuery, ignoreCase = true)
+                }
             }
             .let { list ->
                 if (typeFilter == null) list
@@ -309,12 +319,15 @@ fun NoteListScreen(
                                             )
                                         }
                                         Spacer(modifier = Modifier.height(4.dp))
+                                        val plainText = remember(note) {
+                                            Html.fromHtml(note.content, Html.FROM_HTML_MODE_COMPACT).toString()
+                                        }
                                         Text(
-                                            text = note.content.take(100),
+                                            text = plainText.take(100),
                                             style = MaterialTheme.typography.bodyMedium,
                                             maxLines = 2
                                         )
-                                        if (note.content.length > 100) {
+                                        if (plainText.length > 100) {
                                             Text(
                                                 text = "...",
                                                 style = MaterialTheme.typography.bodySmall,
@@ -339,6 +352,8 @@ fun NoteListScreen(
                                             )
                                         }
                                     }
+                                    // ── 图片缩略图 ──
+                                    NoteImageThumbnail(htmlContent = note.content)
                                 }
                             }
                         }
@@ -347,4 +362,41 @@ fun NoteListScreen(
             }
         }
     }
+}
+
+// ─── 图片缩略图组件 ──────────────────────────────────
+@Composable
+private fun NoteImageThumbnail(
+    htmlContent: String,
+    modifier: Modifier = Modifier
+) {
+    val imageSrc = remember(htmlContent) { extractFirstImageSrc(htmlContent) }
+    if (imageSrc == null) return
+
+    val bitmap = remember(imageSrc) {
+        try {
+            val base64Data = imageSrc.substringAfter("base64,")
+            val bytes = Base64.decode(base64Data, Base64.DEFAULT)
+            val opts = BitmapFactory.Options().apply { inSampleSize = 4 }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+        } catch (e: Exception) { null }
+    }
+
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = null,
+            modifier = modifier
+                .padding(start = 8.dp)
+                .size(56.dp)
+                .clip(RoundedCornerShape(8.dp)),
+            contentScale = ContentScale.Crop
+        )
+    }
+}
+
+/** 从 HTML 中提取第一张图片的 src 属性值 */
+private fun extractFirstImageSrc(html: String): String? {
+    val regex = """src=["'](data:image/[^"']+)["']""".toRegex()
+    return regex.find(html)?.groupValues?.getOrNull(1)
 }
