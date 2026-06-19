@@ -162,6 +162,7 @@ fun RichTextEditor(
     onContentChanged: (String) -> Unit = {},
     onFormatChanged: ((String) -> Unit)? = null,
     onTap: () -> Unit = {},
+    onRequestFocus: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     // 使用 LaunchedEffect（而非 AndroidView.update）设置初始内容，
@@ -201,7 +202,8 @@ fun RichTextEditor(
                 // ── JS Bridge ──
                 val bridge = RichEditorBridge(
                     onContentChanged = { html -> onContentChanged(html) },
-                    onFormatState = { json -> onFormatChanged?.invoke(json) }
+                    onFormatState = { json -> onFormatChanged?.invoke(json) },
+                    onRequestFocus = onRequestFocus?.let { { it() } }
                 )
                 addJavascriptInterface(bridge, "RichEditorBridge")
 

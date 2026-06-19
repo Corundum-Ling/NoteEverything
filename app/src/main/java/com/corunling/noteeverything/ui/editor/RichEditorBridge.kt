@@ -15,7 +15,8 @@ import android.webkit.JavascriptInterface
 
 class RichEditorBridge(
     private val onContentChanged: (String) -> Unit,
-    private val onFormatState: ((String) -> Unit)? = null
+    private val onFormatState: ((String) -> Unit)? = null,
+    private val onRequestFocus: (() -> Unit)? = null
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -27,5 +28,10 @@ class RichEditorBridge(
     @JavascriptInterface
     fun onFormatState(json: String) {
         mainHandler.post { onFormatState?.invoke(json) }
+    }
+
+    @JavascriptInterface
+    fun onRequestFocus() {
+        mainHandler.post { onRequestFocus?.invoke() }
     }
 }

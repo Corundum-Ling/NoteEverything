@@ -16,7 +16,7 @@
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans SC", sans-serif;
     font-size: 16px;
     line-height: 1.6;
-    color: #1F1F1F;
+    color: #000000;
     background: transparent;
   }
 
@@ -116,7 +116,6 @@
   var debounceTimer = null;
   var selTimer = null;
 
-  // ── 通知 Android 内容变化 ──
   function notifyChange() {
     if (isInternalChange) { isInternalChange = false; return; }
     if (debounceTimer) clearTimeout(debounceTimer);
@@ -128,25 +127,52 @@
   }
 
   editor.addEventListener('input', notifyChange);
-  // 粘贴时清除 Word/网页的脏样式
   editor.addEventListener('paste', function(e) {
     e.preventDefault();
     var text = (e.clipboardData || window.clipboardData).getData('text/plain');
     document.execCommand('insertText', false, text);
   });
 
-  // ── Android → JS 接口 ──
-
-  // 执行格式化命令
+  // ── 格式化命令 ──
   function execFormat(cmd, value) {
-    if (value) {
+    // fontSize：段落级，设所在块元素（LI/P/DIV/H1-6），序号自然跟随
+    if (cmd === 'fontSize' && value) {
+      var sel = window.getSelection();
+      if (sel.rangeCount > 0) {
+        var rng = sel.getRangeAt(0);
+        var block = rng.commonAncestorContainer;
+        while (block && block.nodeType !== 1) block = block.parentNode;
+        while (block && block !== editor && !/^(P|DIV|H[1-6]|LI|BLOCKQUOTE|BODY)$/.test(block.nodeName)) {
+          block = block.parentNode;
+        }
+        if (!block || block === editor || block.nodeName === 'BODY') {
+          document.execCommand('formatBlock', false, '<p>');
+          block = sel.getRangeAt(0).startContainer;
+          while (block && block.nodeType !== 1) block = block.parentNode;
+          while (block && block !== editor && block.nodeName !== 'P') block = block.parentNode;
+        }
+        if (!block || block === editor) block = editor;
+        var fpx2 = parseInt(value);
+        if (block.nodeName === 'LI' && fpx2 > 36) value = '36px';
+        block.style.fontSize = value;
+      }
+      editor.focus();
+      notifyChange();
+      setTimeout(queryFormatState, 20);
+      return;
+    }
+    if (cmd === 'foreColor' && value) {
+      document.execCommand('styleWithCSS', false, true);
+      document.execCommand(cmd, false, value);
+      document.execCommand('styleWithCSS', false, false);
+    } else if (value) {
       document.execCommand(cmd, false, value);
     } else {
       document.execCommand(cmd, false, null);
     }
     editor.focus();
     notifyChange();
-    setTimeout(queryFormatState, 30);
+    setTimeout(queryFormatState, 20);
   }
 
   // 设置编辑器内容（通过 JSON 传递，避免 escape 问题）
@@ -179,6 +205,32 @@
     var img = '<img src="' + base64 + '" alt="' + (fileName || '图片') + '" />';
     document.execCommand('insertHTML', false, img);
     notifyChange();
+  }
+
+  // 对齐（直接设块级元素 style.textAlign，列表穿透到 OL/UL 让序号跟随）
+  function applyAlignment(align) {
+    try {
+      var sel = window.getSelection();
+      if (sel.rangeCount === 0) return;
+      var node = sel.getRangeAt(0).startContainer;
+      while (node && node.nodeType !== 1) node = node.parentNode;
+      while (node && node !== editor && !/^(P|DIV|H[1-6]|UL|OL|LI|BLOCKQUOTE|BODY)$/.test(node.nodeName)) {
+        node = node.parentNode;
+      }
+      if (node && node !== editor && node.nodeName !== 'BODY') {
+        if (node.nodeName === 'LI') node = node.parentNode;
+        if (node) {
+          node.style.textAlign = align;
+          // 列表：左对齐用 outside（序号顶左），中/右对齐用 inside（序号跟随）
+          if (/^(UL|OL)$/.test(node.nodeName)) {
+            node.style.listStylePosition = (align === 'left') ? 'outside' : 'inside';
+          }
+        }
+      }
+    } catch(e) {}
+    editor.focus();
+    notifyChange();
+    setTimeout(queryFormatState, 30);
   }
 
   // 通过 URL 插入图片
@@ -222,12 +274,37 @@
       italic: document.queryCommandState('italic'),
       underline: document.queryCommandState('underline'),
       strikeThrough: document.queryCommandState('strikeThrough'),
-      justifyLeft: document.queryCommandState('justifyLeft'),
-      justifyCenter: document.queryCommandState('justifyCenter'),
-      justifyRight: document.queryCommandState('justifyRight'),
       insertUnorderedList: document.queryCommandState('insertUnorderedList'),
       insertOrderedList: document.queryCommandState('insertOrderedList')
     };
+    // alignment: detect from CSS textAlign (applyAlignment sets style directly)
+    state.justifyLeft = true; state.justifyCenter = false; state.justifyRight = false;
+    try {
+      var aNode = window.getSelection().getRangeAt(0).startContainer;
+      while (aNode && aNode.nodeType !== 1) aNode = aNode.parentNode;
+      while (aNode && aNode !== editor && !/^(P|DIV|H[1-6]|UL|OL|LI|BLOCKQUOTE|BODY)$/.test(aNode.nodeName)) {
+        aNode = aNode.parentNode;
+      }
+      if (aNode && aNode.nodeName === 'LI') aNode = aNode.parentNode;
+      if (aNode && aNode !== editor && aNode.nodeName !== 'BODY') {
+        var ta = aNode.style.textAlign || '';
+        state.justifyLeft = (ta === 'left');
+        state.justifyCenter = (ta === 'center');
+        state.justifyRight = (ta === 'right');
+      }
+    } catch(e) {}
+    // fontSize: 从块级 CSS 读取
+    try {
+      var fn = window.getSelection().getRangeAt(0).startContainer;
+      while (fn && fn.nodeType !== 1) fn = fn.parentNode;
+      if (fn) { var fcs = window.getComputedStyle(fn); state.fontSize = parseInt(fcs.fontSize) + 'px'; }
+    } catch(e) {}
+    // foreColor: CSS 反查
+    try {
+      var n = window.getSelection().getRangeAt(0).startContainer;
+      while (n && n.nodeType !== 1) n = n.parentNode;
+      if (n) { var qcv = document.queryCommandValue('foreColor'); state.foreColor = (qcv && qcv !== 'rgb(0, 0, 0)') ? qcv : (window.getComputedStyle(n).color || ''); }
+    } catch(e) {}
     // 检查 ordered list 的 type 属性
     try {
       var node = window.getSelection().getRangeAt(0).startContainer;
