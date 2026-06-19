@@ -72,7 +72,7 @@ app/src/main/java/com/corunling/noteeverything/
 - [x] MVP 核心闭环
 - [x] 笔记↔时长关联
 - [x] 类型筛选 + 批量操作
-- [ ] 富文本编辑 + 图片插入
+- [x] 富文本编辑 + 格式面板 + 图片插入
 - [ ] 云端同步
 
 ## License
