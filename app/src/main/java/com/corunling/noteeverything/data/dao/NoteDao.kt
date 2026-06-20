@@ -47,4 +47,16 @@ interface NoteDao {
     // 搜索笔记内容
     @Query("SELECT * FROM notes WHERE content LIKE '%' || :query || '%' ORDER BY timestamp DESC")
     fun search(query: String): Flow<List<NoteEntity>>
+
+    // 清空所有笔记
+    @Query("DELETE FROM notes")
+    suspend fun deleteAll()
+
+    // 置顶/取消置顶
+    @Query("UPDATE notes SET pinned = :pinned WHERE id = :id")
+    suspend fun updatePinned(id: Long, pinned: Boolean)
+
+    // 锁定/解锁
+    @Query("UPDATE notes SET locked = :locked WHERE id = :id")
+    suspend fun updateLocked(id: Long, locked: Boolean)
 }

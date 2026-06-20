@@ -52,6 +52,7 @@ import com.corunling.noteeverything.ui.editor.RichTextEditorState
 import com.corunling.noteeverything.ui.editor.rememberRichTextEditorState
 import com.corunling.noteeverything.ui.theme.CategoryColors
 import com.corunling.noteeverything.util.DateTimeUtils
+import com.corunling.noteeverything.util.NoteExporter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
@@ -69,6 +70,10 @@ fun NoteEditorScreen(
     var selectedSoftwareId by remember { mutableStateOf(softwareId) }; var isSaving by remember { mutableStateOf(false) }
     var timestamp by remember { mutableStateOf(DateTimeUtils.now()) }
     val scope = rememberCoroutineScope(); val context = LocalContext.current
+
+    // 导出状态
+    var exportTargetFormat by remember { mutableStateOf<String?>(null) } // "html" / "doc" / null
+    var exportContent by remember { mutableStateOf("") } // 编辑器实时内容快照
     val editorState = rememberRichTextEditorState()
 
     LaunchedEffect(noteId) { if (noteId != null) { val e = repository.getNoteById(noteId); if (e != null) { initialHtml = e.content; content = e.content; selectedSoftwareId = e.softwareId; timestamp = e.timestamp } } }
@@ -80,11 +85,57 @@ fun NoteEditorScreen(
     val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted -> if (granted) { val dir = File(context.cacheDir, "camera"); dir.mkdirs(); val file = File(dir, "nc_${System.currentTimeMillis()}.jpg"); file.createNewFile(); camUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file); cameraLauncher.launch(camUri!!) } }
     fun launchCamera() { if (ContextCompat.checkSelfPermission(context, android.Manifest.permission.CAMERA) == android.content.pm.PackageManager.PERMISSION_GRANTED) { val dir = File(context.cacheDir, "camera"); dir.mkdirs(); val file = File(dir, "nc_${System.currentTimeMillis()}.jpg"); file.createNewFile(); camUri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file); cameraLauncher.launch(camUri!!) } else { permLauncher.launch(android.Manifest.permission.CAMERA) } }
 
+    // ── 导出 SAF Launchers ──
+    val exportHtmlLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/html")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                val result = NoteExporter.exportAsHtml(
+                    context = context,
+                    noteContent = exportContent,
+                    noteTimestamp = timestamp,
+                    softwareName = allSoftware.find { it.id == selectedSoftwareId }?.name,
+                    outputUri = uri
+                )
+                result.onSuccess { android.widget.Toast.makeText(context, "导出成功", android.widget.Toast.LENGTH_SHORT).show() }
+                result.onFailure { android.widget.Toast.makeText(context, "导出失败：${it.message}", android.widget.Toast.LENGTH_SHORT).show() }
+            }
+        }
+    }
+    val exportDocLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/msword")
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                val result = NoteExporter.exportAsDoc(
+                    context = context,
+                    noteContent = exportContent,
+                    noteTimestamp = timestamp,
+                    softwareName = allSoftware.find { it.id == selectedSoftwareId }?.name,
+                    outputUri = uri
+                )
+                result.onSuccess { android.widget.Toast.makeText(context, "导出成功", android.widget.Toast.LENGTH_SHORT).show() }
+                result.onFailure { android.widget.Toast.makeText(context, "导出失败：${it.message}", android.widget.Toast.LENGTH_SHORT).show() }
+            }
+        }
+    }
+
     var allTimeRecords by remember { mutableStateOf<List<TimeRecordEntity>>(emptyList()) }; var linkedRecordIds by remember { mutableStateOf<Set<Long>>(emptySet()) }; var linksInitialized by remember { mutableStateOf(false) }
     LaunchedEffect(selectedSoftwareId) { if (selectedSoftwareId != null) repository.getTimeRecordsBySoftware(selectedSoftwareId!!).collect { allTimeRecords = it.sortedByDescending { r -> r.startTime } } else allTimeRecords = emptyList() }
     LaunchedEffect(noteId, allTimeRecords, linksInitialized) { if (!linksInitialized) { if (noteId != null) repository.getLinksForNote(noteId).collect { linkedRecordIds = it.map { l -> l.timeRecordId }.toSet() } else if (selectedSoftwareId != null) linkedRecordIds = allTimeRecords.map { it.id }.toSet(); linksInitialized = true } }
 
     val title = if (noteId != null) "编辑笔记" else "新建笔记"; val selectedSoftware = allSoftware.find { it.id == selectedSoftwareId }
+
+    fun startExport(format: String) {
+        editorState.requestContent { html ->
+            exportContent = html
+            exportTargetFormat = null
+            val filename = NoteExporter.suggestFileName(html, if (format == "html") "html" else "doc")
+            if (format == "html") exportHtmlLauncher.launch(filename)
+            else exportDocLauncher.launch(filename)
+        }
+    }
 
     var fmtB by remember { mutableStateOf(false) }; var fmti by remember { mutableStateOf(false) }; var fmtU by remember { mutableStateOf(false) }; var fmtS by remember { mutableStateOf(false) }
     var fmtAL by remember { mutableStateOf(true) }; var fmtAC by remember { mutableStateOf(false) }; var fmtAR by remember { mutableStateOf(false) }
@@ -93,6 +144,26 @@ fun NoteEditorScreen(
     fun parseFmt(json: String) { try { val o = org.json.JSONObject(json); fmtB = o.optBoolean("bold"); fmti = o.optBoolean("italic"); fmtU = o.optBoolean("underline"); fmtS = o.optBoolean("strikeThrough"); fmtAL = o.optBoolean("justifyLeft"); fmtAC = o.optBoolean("justifyCenter"); fmtAR = o.optBoolean("justifyRight"); fmtUL = o.optBoolean("insertUnorderedList"); fmtOL = o.optBoolean("insertOrderedList"); fmtOLT = o.optString("orderedListType", "1"); fmtSize = o.optString("fontSize", "16px"); fmtColor = o.optString("foreColor", "#000000") } catch (_: Exception) {} }
 
     fun save() { if (isSaving) return; isSaving = true; editorState.requestContent { html -> content = html; scope.launch { try { val id: Long? = if (noteId != null) { val e = repository.getNoteById(noteId); if (e != null) { repository.updateNote(e.copy(softwareId = selectedSoftwareId, content = html, timestamp = timestamp, type = if (selectedSoftwareId != null) "software" else "free")); noteId } else null } else repository.createNote(softwareId = selectedSoftwareId, content = html, timestamp = timestamp); if (id != null) repository.setNoteLinks(id, linkedRecordIds.toList()) } catch (_: Exception) { isSaving = false; return@launch }; navController.popBackStack() } } }
+
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+    if (showDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDeleteConfirm = false },
+            icon = { Icon(Icons.Default.Warning, null, tint = MaterialTheme.colorScheme.error) },
+            title = { Text("删除笔记") },
+            text = { Text("确定要删除此笔记吗？此操作不可撤销。") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showDeleteConfirm = false
+                        noteId?.let { scope.launch { val e = repository.getNoteById(it); if (e != null) { repository.deleteNote(e); navController.popBackStack() } } }
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                ) { Text("删除") }
+            },
+            dismissButton = { TextButton(onClick = { showDeleteConfirm = false }) { Text("取消") } }
+        )
+    }
 
     var panelState by remember { mutableStateOf(PanelState.IDLE) }; var activeToolCategory by remember { mutableStateOf<ToolbarCategory?>(null) }
     val keyboardController = LocalSoftwareKeyboardController.current; val density = LocalDensity.current
@@ -113,7 +184,20 @@ fun NoteEditorScreen(
                 title = { Text(title) },
                 navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                actions = { TextButton(onClick = { save() }, enabled = !isSaving, shape = RoundedCornerShape(16.dp)) { Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primary) { Text(if (isSaving) "保存中..." else "保存", modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onPrimary) } } }
+                actions = {
+                    // 导出按钮
+                    IconButton(onClick = { exportTargetFormat = "select" }) {
+                        Icon(Icons.Default.FileDownload, contentDescription = "导出")
+                    }
+                    // 删除按钮（仅编辑模式显示）
+                    if (noteId != null) {
+                        IconButton(onClick = { showDeleteConfirm = true }) {
+                            Icon(Icons.Default.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                    // 保存按钮
+                    TextButton(onClick = { save() }, enabled = !isSaving, shape = RoundedCornerShape(16.dp)) { Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primary) { Text(if (isSaving) "保存中..." else "保存", modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onPrimary) } }
+                }
             )
         }
     ) { padding ->
@@ -186,6 +270,41 @@ fun NoteEditorScreen(
                 }
             }
         }
+    }
+
+    // ── 导出格式选择对话框 ──
+    if (exportTargetFormat == "select") {
+        AlertDialog(
+            onDismissRequest = { exportTargetFormat = null },
+            icon = { Icon(Icons.Default.FileDownload, contentDescription = null) },
+            title = { Text("导出笔记") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("选择导出格式：")
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = { startExport("html") }
+                        ) {
+                            Icon(Icons.Default.Code, contentDescription = null)
+                            Spacer(Modifier.width(4.dp))
+                            Text("HTML")
+                        }
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = { startExport("doc") }
+                        ) {
+                            Icon(Icons.Default.Description, contentDescription = null)
+                            Spacer(Modifier.width(4.dp))
+                            Text("Word")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { exportTargetFormat = null }) { Text("取消") }
+            }
+        )
     }
 }
 

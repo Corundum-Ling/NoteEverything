@@ -44,4 +44,24 @@ interface SoftwareDao {
     // 按名称搜索（LIKE 模糊匹配）
     @Query("SELECT * FROM software WHERE name LIKE '%' || :query || '%'")
     fun search(query: String): Flow<List<SoftwareEntity>>
+
+    // 一次性查询全部（非 Flow），用于导出时获取软件名映射
+    @Query("SELECT * FROM software ORDER BY category, name")
+    suspend fun getAllSync(): List<SoftwareEntity>
+
+    // 清空所有软件条目
+    @Query("DELETE FROM software")
+    suspend fun deleteAll()
+
+    // 置顶/取消置顶
+    @Query("UPDATE software SET pinned = :pinned WHERE id = :id")
+    suspend fun updatePinned(id: Long, pinned: Boolean)
+
+    // 锁定/解锁
+    @Query("UPDATE software SET locked = :locked WHERE id = :id")
+    suspend fun updateLocked(id: Long, locked: Boolean)
+
+    // 查询全部，置顶优先
+    @Query("SELECT * FROM software ORDER BY pinned DESC, category, name")
+    fun getAllPinnedFirst(): Flow<List<SoftwareEntity>>
 }

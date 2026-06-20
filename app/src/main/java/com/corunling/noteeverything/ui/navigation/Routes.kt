@@ -14,6 +14,9 @@ sealed class Routes(val route: String) {
     // 主页（三 Tab）
     object Main : Routes("main")
 
+    // 设置页
+    object Settings : Routes("settings")
+
     // 软件详情页：路径参数 softwareId
     object SoftwareDetail : Routes("software/{softwareId}") {
         fun create(softwareId: Long) = "software/$softwareId"

@@ -30,7 +30,7 @@ class SoftwareViewModel(
     private val repository: NoteEverythingRepository
 ) : ViewModel() {
 
-    // 基础软件列表（Room Flow）
+    // 基础软件列表
     val allSoftware = repository.getAllSoftware()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 

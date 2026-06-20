@@ -23,5 +23,7 @@ data class SoftwareEntity(
     val platform: String,    // 平台：PC / Android / iOS / Switch / Other
     val iconUri: String? = null,  // 图标路径（可选，MVP 阶段暂不用）
     val category: String,    // 分类：游戏 / 工具 / 学习 / 其他
+    val pinned: Boolean = false,  // 是否置顶
+    val locked: Boolean = false,   // 是否锁定（锁定后不可删除）
     val createdAt: Long = System.currentTimeMillis()  // 创建时间戳
 )

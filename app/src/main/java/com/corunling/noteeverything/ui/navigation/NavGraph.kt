@@ -15,15 +15,18 @@
 package com.corunling.noteeverything.ui.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.corunling.noteeverything.App
 import com.corunling.noteeverything.data.NoteEverythingRepository
 import com.corunling.noteeverything.ui.MainScreen
 import com.corunling.noteeverything.ui.software.SoftwareDetailScreen
 import com.corunling.noteeverything.ui.note.NoteEditorScreen
+import com.corunling.noteeverything.ui.settings.SettingsScreen
 
 @Composable
 fun NavGraph(
@@ -38,6 +41,16 @@ fun NavGraph(
         composable(Routes.Main.route) {
             MainScreen(
                 repository = repository,
+                navController = navController
+            )
+        }
+
+        // 设置页
+        composable(Routes.Settings.route) {
+            val app = LocalContext.current.applicationContext as App
+            SettingsScreen(
+                settingsManager = app.settingsManager,
+                app = app,
                 navController = navController
             )
         }

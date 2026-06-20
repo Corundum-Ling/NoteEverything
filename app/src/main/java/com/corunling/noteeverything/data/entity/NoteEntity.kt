@@ -30,5 +30,7 @@ data class NoteEntity(
     val tags: String? = null,      // 标签，逗号分隔（如 "战斗,BOSS"）
     val imageUri: String? = null,  // 图片路径（可选）
     val location: String? = null,  // 地点描述（可选）
+    val pinned: Boolean = false,   // 是否置顶
+    val locked: Boolean = false,   // 是否锁定（锁定后不可删除）
     val createdAt: Long = System.currentTimeMillis()
 )

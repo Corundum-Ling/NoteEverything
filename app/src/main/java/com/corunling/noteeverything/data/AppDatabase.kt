@@ -36,7 +36,7 @@ import com.corunling.noteeverything.data.entity.TimeRecordEntity
         TimeRecordEntity::class,
         NoteTimeRecordLink::class
     ],
-    version = 2,
+    version = 4,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

@@ -94,4 +94,7 @@ dependencies {
 
     // ─── Kotlin 协程 ──────────────────────────────────────
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
+
+    // ─── DataStore（设置持久化）─────────────────────────────
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 }

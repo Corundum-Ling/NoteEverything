@@ -40,4 +40,8 @@ interface NoteTimeRecordLinkDao {
     // 删除某条笔记的全部关联
     @Query("DELETE FROM note_time_record_link WHERE noteId = :noteId")
     suspend fun deleteAllForNote(noteId: Long)
+
+    // 清空所有关联关系
+    @Query("DELETE FROM note_time_record_link")
+    suspend fun deleteAll()
 }

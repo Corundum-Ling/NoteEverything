@@ -1,21 +1,25 @@
 // ============================================================
-// MainScreen.kt --- 主页面：三 Tab 导航 + 选择模式
+// MainScreen.kt — 主页面：三 Tab 导航 + 选择模式
 // ============================================================
+// 普通模式下显示 TopAppBar + 底部导航 + FAB。
+// 选择模式下 TopAppBar 显示"已选 X 项"+全选+取消，
+// 底部导航隐藏，FAB 隐藏，浮动操作卡片从下方浮出。
 
 package com.corunling.noteeverything.ui
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.corunling.noteeverything.data.NoteEverythingRepository
@@ -43,24 +47,24 @@ fun MainScreen(
 ) {
     var selectedTab by rememberSaveable { mutableStateOf(MainTab.SOFTWARE) }
 
+    // ── 选择模式状态（由子页面回调更新）──
     var selectionMode by rememberSaveable { mutableStateOf(false) }
     var selectionCount by rememberSaveable { mutableIntStateOf(0) }
     var selectionTotal by rememberSaveable { mutableIntStateOf(0) }
     var selectAllAction by remember { mutableStateOf<() -> Unit>({}) }
     var clearSelectionAction by remember { mutableStateOf<() -> Unit>({}) }
 
+    // 子页面注册全选/取消回调
     val onRegisterActions: ActionRegistrar = { selectAll, clearSelection ->
         selectAllAction = selectAll
         clearSelectionAction = clearSelection
     }
 
-    var pendingAction by remember { mutableStateOf<String?>(null) }
-    fun consumeAction() { pendingAction = null }
-
     Box(Modifier.fillMaxSize()) {
     Scaffold(
         topBar = {
             if (selectionMode) {
+                // ── 选择模式 TopAppBar（标题居中）──
                 CenterAlignedTopAppBar(
                     title = { Text(if (selectionCount > 0) "已选 $selectionCount 项" else "选择项目") },
                     navigationIcon = {
@@ -83,6 +87,7 @@ fun MainScreen(
                     )
                 )
             } else {
+                // ── 普通模式 TopAppBar（带齿轮设置入口）──
                 TopAppBar(
                     title = { Text("NoteEverything") },
                     actions = {
@@ -97,36 +102,36 @@ fun MainScreen(
             }
         },
         bottomBar = {
-            Box(Modifier.fillMaxWidth()) {
-                AnimatedVisibility(
-                    visible = !selectionMode,
-                    enter = slideInVertically(animationSpec = tween(200)) { it },
-                    exit = slideOutVertically(animationSpec = tween(200)) { it }
-                ) {
-                    NavigationBar {
-                        NavigationBarItem(
-                            icon = { Icon(Icons.Default.Apps, contentDescription = null) },
-                            label = { Text("软件") },
-                            selected = selectedTab == MainTab.SOFTWARE,
-                            onClick = { selectedTab = MainTab.SOFTWARE }
-                        )
-                        NavigationBarItem(
-                            icon = { Icon(Icons.Default.EditNote, contentDescription = null) },
-                            label = { Text("笔记") },
-                            selected = selectedTab == MainTab.NOTES,
-                            onClick = { selectedTab = MainTab.NOTES }
-                        )
-                        NavigationBarItem(
-                            icon = { Icon(Icons.Default.BarChart, contentDescription = null) },
-                            label = { Text("统计") },
-                            selected = selectedTab == MainTab.TIME,
-                            onClick = { selectedTab = MainTab.TIME }
-                        )
-                    }
+            // 导航栏独立存在，进出平滑
+            AnimatedVisibility(
+                visible = !selectionMode,
+                enter = slideInVertically(animationSpec = tween(200)) { it },
+                exit = slideOutVertically(animationSpec = tween(200)) { it }
+            ) {
+                NavigationBar {
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.Apps, contentDescription = null) },
+                        label = { Text("软件") },
+                        selected = selectedTab == MainTab.SOFTWARE,
+                        onClick = { selectedTab = MainTab.SOFTWARE }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.EditNote, contentDescription = null) },
+                        label = { Text("笔记") },
+                        selected = selectedTab == MainTab.NOTES,
+                        onClick = { selectedTab = MainTab.NOTES }
+                    )
+                    NavigationBarItem(
+                        icon = { Icon(Icons.Default.BarChart, contentDescription = null) },
+                        label = { Text("统计") },
+                        selected = selectedTab == MainTab.TIME,
+                        onClick = { selectedTab = MainTab.TIME }
+                    )
                 }
             }
         },
         floatingActionButton = {
+            // FAB 动画（缩小+淡出，阴影原位跟随）
             val fabProgress by animateFloatAsState(
                 targetValue = if (selectionMode) 0f else 1f,
                 animationSpec = tween(200),
@@ -165,12 +170,13 @@ fun MainScreen(
                             Icon(Icons.Default.Edit, contentDescription = "写笔记")
                         }
                     }
-                    MainTab.TIME -> { }
+                    MainTab.TIME -> { /* 统计 Tab 无 FAB */ }
                 }
             }
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding).fillMaxSize()) {
+            // ── Tab 内容 ──
             when (selectedTab) {
                 MainTab.SOFTWARE -> SoftwareListScreen(
                     repository = repository,
@@ -183,9 +189,7 @@ fun MainScreen(
                         selectionCount = count
                         selectionTotal = total
                     },
-                    onRegisterActions = onRegisterActions,
-                    pendingAction = pendingAction,
-                    onActionConsumed = { consumeAction() }
+                    onRegisterActions = onRegisterActions
                 )
                 MainTab.NOTES -> NoteListScreen(
                     repository = repository,
@@ -198,9 +202,7 @@ fun MainScreen(
                         selectionCount = count
                         selectionTotal = total
                     },
-                    onRegisterActions = onRegisterActions,
-                    pendingAction = pendingAction,
-                    onActionConsumed = { consumeAction() }
+                    onRegisterActions = onRegisterActions
                 )
                 MainTab.TIME -> TimeOverviewScreen(repository = repository)
             }
@@ -216,16 +218,17 @@ fun MainScreen(
     ) {
         SelectionFloatingCard(
             hasSelection = selectionCount > 0,
-            showExport = selectedTab == MainTab.NOTES,
-            onPin = { pendingAction = "pin" },
-            onLock = { pendingAction = "lock" },
-            onDelete = { pendingAction = "delete" },
-            onTags = { pendingAction = "tags" },
-            onExport = { pendingAction = "export" }
+            onPin = { /* TODO */ },
+            onLock = { /* 占位 */ },
+            onDelete = { /* TODO */ },
+            onTags = { /* 占位 */ },
+            onExport = { /* 占位 */ }
         )
     }
     }
 }
+
+// ─── 添加软件弹窗 ────────────────────────────────────────────
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -251,6 +254,7 @@ fun AddSoftwareDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(modifier = Modifier.height(8.dp))
+
                 var platformExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
                     expanded = platformExpanded,
@@ -277,6 +281,7 @@ fun AddSoftwareDialog(
                     }
                 }
                 Spacer(modifier = Modifier.height(8.dp))
+
                 var categoryExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
                     expanded = categoryExpanded,

@@ -64,6 +64,10 @@ interface TimeRecordDao {
     """)
     suspend fun getStatsInRange(startDate: String, endDate: String): List<SoftwareDuration>
 
+    // 清空所有时长记录
+    @Query("DELETE FROM time_records")
+    suspend fun deleteAll()
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(timeRecord: TimeRecordEntity): Long
 

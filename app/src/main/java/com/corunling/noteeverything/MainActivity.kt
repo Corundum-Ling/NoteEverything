@@ -9,6 +9,11 @@
 // - setContent {}：告诉 Android "这个 Activity 的 UI 由 Compose 来画"
 // - rememberNavController()：创建一个导航控制器，管理页面跳转
 // - Surface：Compose 的"画布"，提供背景色和主题
+//
+// 主题设置：
+// - 从 App.settingsManager.settingsFlow 读取 darkMode 设置
+// - 将 darkTheme 参数传递给 NoteEverythingTheme
+// - 状态栏适配：深色模式用浅色图标，浅色模式用深色图标
 
 package com.corunling.noteeverything
 
@@ -19,33 +24,35 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.view.WindowCompat
 import androidx.navigation.compose.rememberNavController
 import com.corunling.noteeverything.ui.navigation.NavGraph
 import com.corunling.noteeverything.ui.theme.NoteEverythingTheme
+import com.corunling.noteeverything.util.AppSettings
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        // 浅色主题强制深色状态栏图标
-        WindowCompat.getInsetsController(window, window.decorView).apply {
-            isAppearanceLightStatusBars = true
-        }
+
         setContent {
-            // NoteEverythingTheme：应用主题色、字体等样式
-            NoteEverythingTheme {
-                // Surface：一个带背景色的容器，相当于"画纸"
+            val app = application as App
+            val settings by app.settingsManager.settingsFlow.collectAsState(initial = AppSettings())
+
+            // 根据主题设置状态栏图标颜色
+            WindowCompat.getInsetsController(window, window.decorView).apply {
+                isAppearanceLightStatusBars = !settings.darkMode
+            }
+
+            NoteEverythingTheme(darkTheme = settings.darkMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    // 获取 Application 实例 → 拿到 repository
-                    val app = application as App
-                    // 创建导航控制器
                     val navController = rememberNavController()
-                    // NavGraph：定义所有页面的路由表
                     NavGraph(
                         navController = navController,
                         repository = app.repository

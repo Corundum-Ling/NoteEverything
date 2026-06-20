@@ -38,6 +38,9 @@ class NoteEverythingRepository(
 
     fun getAllSoftware(): Flow<List<SoftwareEntity>> = softwareDao.getAll()
 
+    /** 查询全部软件，置顶优先 */
+    fun getAllSoftwarePinnedFirst(): Flow<List<SoftwareEntity>> = softwareDao.getAllPinnedFirst()
+
     suspend fun getSoftware(id: Long): SoftwareEntity? = softwareDao.getById(id)
 
     suspend fun createSoftware(name: String, platform: String, category: String): Long {
@@ -49,6 +52,20 @@ class NoteEverythingRepository(
     suspend fun updateSoftware(software: SoftwareEntity) = softwareDao.update(software)
 
     suspend fun deleteSoftware(software: SoftwareEntity) = softwareDao.delete(software)
+
+    /**
+     * 置顶/取消置顶软件
+     * @param id 软件 ID
+     * @param pinned true=置顶，false=取消置顶
+     */
+    suspend fun setSoftwarePinned(id: Long, pinned: Boolean) = softwareDao.updatePinned(id, pinned)
+
+    /**
+     * 锁定/解锁软件
+     * @param id 软件 ID
+     * @param locked true=锁定，false=解锁
+     */
+    suspend fun setSoftwareLocked(id: Long, locked: Boolean) = softwareDao.updateLocked(id, locked)
 
     // ════════════════════════════════════════════════
     // 笔记相关
@@ -95,6 +112,20 @@ class NoteEverythingRepository(
     suspend fun updateNote(note: NoteEntity) = noteDao.update(note)
 
     suspend fun deleteNote(note: NoteEntity) = noteDao.delete(note)
+
+    /**
+     * 置顶/取消置顶笔记
+     * @param id 笔记 ID
+     * @param pinned true=置顶，false=取消置顶
+     */
+    suspend fun setNotePinned(id: Long, pinned: Boolean) = noteDao.updatePinned(id, pinned)
+
+    /**
+     * 锁定/解锁笔记
+     * @param id 笔记 ID
+     * @param locked true=锁定，false=解锁
+     */
+    suspend fun setNoteLocked(id: Long, locked: Boolean) = noteDao.updateLocked(id, locked)
 
     fun searchNotes(query: String): Flow<List<NoteEntity>> = noteDao.search(query)
 
@@ -171,5 +202,20 @@ class NoteEverythingRepository(
         timeRecordIds.forEach { timeRecordId ->
             linkDao.insert(NoteTimeRecordLink(noteId = noteId, timeRecordId = timeRecordId))
         }
+    }
+
+    // ════════════════════════════════════════════════
+    // 批量操作
+    // ════════════════════════════════════════════════
+
+    /** 一次性获取所有软件（非 Flow），用于导出时构建软件名映射 */
+    suspend fun getAllSoftwareSync(): List<SoftwareEntity> = softwareDao.getAllSync()
+
+    /** 清除所有数据（清空四张表） */
+    suspend fun clearAllData() {
+        linkDao.deleteAll()
+        noteDao.deleteAll()
+        timeRecordDao.deleteAll()
+        softwareDao.deleteAll()
     }
 }
