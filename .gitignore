@@ -16,3 +16,5 @@ local.properties
 !/docs/实施计划.md
 /app/release/
 CLAUDE.md
+.gitmsg  
+.gitmessage  
