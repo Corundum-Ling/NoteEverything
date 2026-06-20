@@ -34,6 +34,7 @@ import com.corunling.noteeverything.data.entity.NoteEntity
 import com.corunling.noteeverything.data.entity.TimeRecordEntity
 import com.corunling.noteeverything.ui.theme.CategoryColors
 import com.corunling.noteeverything.util.DateTimeUtils
+import com.corunling.noteeverything.util.NoteExporter
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.text.Html
@@ -94,9 +95,15 @@ fun NoteListScreen(
     val scope = rememberCoroutineScope()
     var showDeleteConfirm by remember { mutableStateOf(false) }
     var showExportPicker by remember { mutableStateOf(false) }
-    val exportHtmlLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/html")) { uri ->
+    var exportNotesContent by remember { mutableStateOf<List<NoteEntity>>(emptyList()) }
+    var exportSoftwareNames by remember { mutableStateOf<Map<Long, String>>(emptyMap()) }
+    var exportFormat by remember { mutableStateOf("html") }
+
+    val exportZipLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null) scope.launch {
-            android.widget.Toast.makeText(context, "导出完成", android.widget.Toast.LENGTH_SHORT).show()
+            val result = NoteExporter.exportNotesZip(context, exportNotesContent, exportSoftwareNames, exportFormat, uri)
+            result.onSuccess { android.widget.Toast.makeText(context, "导出成功：${exportNotesContent.size} 条笔记", android.widget.Toast.LENGTH_SHORT).show() }
+            result.onFailure { android.widget.Toast.makeText(context, "导出失败：${it.message}", android.widget.Toast.LENGTH_SHORT).show() }
         }
     }
 
@@ -163,16 +170,30 @@ fun NoteListScreen(
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         OutlinedButton(modifier = Modifier.weight(1f), onClick = {
                             showExportPicker = false
-                            val filename = "NoteEverything_导出.html"
-                            exportHtmlLauncher.launch(filename)
+                            onActionConsumed()
+                            scope.launch {
+                                val selected = selectedIds.mapNotNull { repository.getNoteById(it) }
+                                val sw = repository.getAllSoftwareSync().associate { it.id to it.name }
+                                exportNotesContent = selected
+                                exportSoftwareNames = sw
+                                exportFormat = "html"
+                                exportZipLauncher.launch("NoteEverything_${selected.size}条.html.zip")
+                            }
                         }) {
                             Icon(Icons.Default.Code, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp)); Text("HTML")
                         }
                         OutlinedButton(modifier = Modifier.weight(1f), onClick = {
                             showExportPicker = false
-                            android.widget.Toast.makeText(context, "Word 导出开发中", android.widget.Toast.LENGTH_SHORT).show()
                             onActionConsumed()
+                            scope.launch {
+                                val selected = selectedIds.mapNotNull { repository.getNoteById(it) }
+                                val sw = repository.getAllSoftwareSync().associate { it.id to it.name }
+                                exportNotesContent = selected
+                                exportSoftwareNames = sw
+                                exportFormat = "doc"
+                                exportZipLauncher.launch("NoteEverything_${selected.size}条.doc.zip")
+                            }
                         }) {
                             Icon(Icons.Default.Description, null, Modifier.size(16.dp))
                             Spacer(Modifier.width(4.dp)); Text("Word")
