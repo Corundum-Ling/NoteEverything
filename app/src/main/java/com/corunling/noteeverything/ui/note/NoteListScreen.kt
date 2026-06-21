@@ -454,6 +454,7 @@ private fun NoteCardItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = { if (!selectionMode) onLongPress() }
