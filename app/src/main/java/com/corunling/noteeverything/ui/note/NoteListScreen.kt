@@ -452,17 +452,20 @@ private fun NoteCardItem(
     )
 
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = { if (!selectionMode) onLongPress() }
-            ),
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(14.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
         colors = CardDefaults.cardColors(containerColor = bgColor)
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+                .combinedClickable(
+                    onClick = onClick,
+                    onLongClick = { if (!selectionMode) onLongPress() }
+                )
+        ) {
         Row(modifier = Modifier.fillMaxWidth()) {
             // 左侧色条
             Box(
@@ -567,6 +570,7 @@ private fun NoteCardItem(
                 // 图片缩略图
                 NoteImageThumbnail(htmlContent = note.content)
             }
+        }
         }
     }
 }

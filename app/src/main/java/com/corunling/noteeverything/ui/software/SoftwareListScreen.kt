@@ -304,30 +304,33 @@ fun SoftwareListScreen(
                 val (gradStart, gradEnd) = CategoryColors.gradientFor(stat.software.category)
 
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(16.dp))
-                        .combinedClickable(
-                            onClick = {
-                                if (selectionMode) {
-                                    updateSelection(
-                                        if (isSelected) selectedIds - stat.software.id
-                                        else selectedIds + stat.software.id
-                                    )
-                                } else {
-                                    onSoftwareClick(stat.software.id)
-                                }
-                            },
-                            onLongClick = {
-                                if (!selectionMode) {
-                                    updateSelection(setOf(stat.software.id))
-                                }
-                            }
-                        ),
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
                     colors = CardDefaults.cardColors(containerColor = bgColor)
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .combinedClickable(
+                                onClick = {
+                                    if (selectionMode) {
+                                        updateSelection(
+                                            if (isSelected) selectedIds - stat.software.id
+                                            else selectedIds + stat.software.id
+                                        )
+                                    } else {
+                                        onSoftwareClick(stat.software.id)
+                                    }
+                                },
+                                onLongClick = {
+                                    if (!selectionMode) {
+                                        updateSelection(setOf(stat.software.id))
+                                    }
+                                }
+                            )
+                    ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -417,6 +420,7 @@ fun SoftwareListScreen(
                     }
                 }
             }
+        }
         }
 
         // ═══ 各分类 ═══
