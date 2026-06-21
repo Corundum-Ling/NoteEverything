@@ -170,6 +170,7 @@
     } else {
       document.execCommand(cmd, false, null);
     }
+    if (cmd === 'insertUnorderedList' || cmd === 'insertOrderedList') updateListStyle();
     editor.focus();
     notifyChange();
     setTimeout(queryFormatState, 20);
@@ -214,14 +215,21 @@
       if (sel.rangeCount === 0) return;
       var node = sel.getRangeAt(0).startContainer;
       while (node && node.nodeType !== 1) node = node.parentNode;
+      var origin = sel.getRangeAt(0).startContainer;
       while (node && node !== editor && !/^(P|DIV|H[1-6]|UL|OL|LI|BLOCKQUOTE|BODY)$/.test(node.nodeName)) {
         node = node.parentNode;
       }
-      if (node && node !== editor && node.nodeName !== 'BODY') {
+      if (!node || node === editor || node.nodeName === 'BODY') {
+        document.execCommand('formatBlock', false, 'div');
+        var rng = window.getSelection().getRangeAt(0);
+        var n = rng.startContainer;
+        while (n && n.nodeType !== 1) n = n.parentNode;
+        while (n && n !== editor && !/^(P|DIV|H[1-6])$/.test(n.nodeName)) n = n.parentNode;
+        if (n && n !== editor) n.style.textAlign = align;
+      } else {
         if (node.nodeName === 'LI') node = node.parentNode;
         if (node) {
           node.style.textAlign = align;
-          // 列表：左对齐用 outside（序号顶左），中/右对齐用 inside（序号跟随）
           if (/^(UL|OL)$/.test(node.nodeName)) {
             node.style.listStylePosition = (align === 'left') ? 'outside' : 'inside';
           }
@@ -262,9 +270,27 @@
     } catch(e) {
       document.execCommand('insertOrderedList', false, null);
     }
+    updateListStyle();
     editor.focus();
     notifyChange();
     setTimeout(queryFormatState, 30);
+  }
+
+  // 根据当前对齐方向更新所有列表的 listStylePosition
+  function updateListStyle() {
+    try {
+      var node = window.getSelection().getRangeAt(0).startContainer;
+      while (node && node.nodeType !== 1) node = node.parentNode;
+      while (node && node !== editor && !/^(P|DIV|H[1-6]|LI|UL|OL|BODY)$/.test(node.nodeName)) node = node.parentNode;
+      if (!node || node === editor || node.nodeName === 'BODY') return;
+      var align = node.style.textAlign || 'left';
+      var lists = editor.querySelectorAll('ul, ol');
+      for (var i = 0; i < lists.length; i++) {
+        // 如果列表本身或其父容器有 textAlign，用那个；否则用当前段的
+        var listAlign = lists[i].style.textAlign || (lists[i].parentNode.style.textAlign || align);
+        lists[i].style.listStylePosition = (listAlign === 'left') ? 'outside' : 'inside';
+      }
+    } catch(e) {}
   }
 
   // 查询当前格式状态，通过 callback 返回 JSON
