@@ -4,11 +4,14 @@
 
 package com.corunling.noteeverything.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -61,6 +64,13 @@ fun MainScreen(
 
     var pendingAction by remember { mutableStateOf<String?>(null) }
     fun consumeAction() { pendingAction = null }
+
+    BackHandler(enabled = selectionMode) {
+        clearSelectionAction()
+        selectionMode = false
+        selectionCount = 0
+        selectionTotal = 0
+    }
 
     Box(Modifier.fillMaxSize()) {
     Scaffold(
@@ -115,26 +125,38 @@ fun MainScreen(
                         ) {
                             MainTab.entries.forEach { tab ->
                                 val isSelected = selectedTab == tab
-                                NavigationBarItem(
-                                    selected = isSelected,
-                                    onClick = { selectedTab = tab },
-                                    icon = {
+                                Box(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null
+                                        ) { selectedTab = tab },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(
+                                        horizontalAlignment = Alignment.CenterHorizontally,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Spacer(Modifier.height(6.dp))
                                         Icon(
                                             imageVector = when (tab) {
                                                 MainTab.SOFTWARE -> Icons.Default.Apps
                                                 MainTab.NOTES -> Icons.Default.EditNote
                                                 MainTab.TIME -> Icons.Default.BarChart
                                             },
-                                            contentDescription = tab.label
+                                            contentDescription = tab.label,
+                                            tint = if (isSelected) MaterialTheme.colorScheme.primary
+                                                   else MaterialTheme.colorScheme.onSurfaceVariant
                                         )
-                                    },
-                                    label = { Text(tab.label) },
-                                    colors = NavigationBarItemDefaults.colors(
-                                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                                        indicatorColor = Color.Transparent
-                                    )
-                                )
+                                        Text(
+                                            tab.label,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = if (isSelected) MaterialTheme.colorScheme.primary
+                                                    else MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
                             }
                         }
                         // 指示器横线覆盖层（补偿 NavigationBar 默认 12dp 左右内边距）

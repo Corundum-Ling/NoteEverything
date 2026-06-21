@@ -255,7 +255,7 @@ fun NoteEditorScreen(
                 RichTextEditor(state = editorState, initialContent = initialHtml, onContentChanged = { content = it; editorState.queryFormatState() }, onFormatChanged = { parseFmt(it) }, onTap = { onEditorTap() }, onRequestFocus = { panelState = PanelState.TYPING; activeToolCategory = null; editorState.focusEditor() }, modifier = Modifier.fillMaxSize())
             }
             val targetH = when { panelState == PanelState.TOOLS -> maxOf(imeHeight, 220.dp); lockHeight -> maxOf(imeHeight, 220.dp); else -> imeHeight }
-            val bottomH by animateDpAsState(targetH, snap(), label = "bh")
+            val bottomH by animateDpAsState(targetH, tween(100), label = "bh")
             val im = panelState == PanelState.TOOLS
             Surface(Modifier.fillMaxWidth(), color = BarBg) {
                 Column {
