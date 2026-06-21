@@ -5,9 +5,12 @@
 package com.corunling.noteeverything.ui
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,6 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
@@ -103,75 +108,134 @@ fun MainScreen(
                     enter = slideInVertically(animationSpec = tween(200)) { it },
                     exit = slideOutVertically(animationSpec = tween(200)) { it }
                 ) {
-                    NavigationBar {
-                        NavigationBarItem(
-                            icon = { Icon(Icons.Default.Apps, contentDescription = null) },
-                            label = { Text("软件") },
-                            selected = selectedTab == MainTab.SOFTWARE,
-                            onClick = { selectedTab = MainTab.SOFTWARE }
-                        )
-                        NavigationBarItem(
-                            icon = { Icon(Icons.Default.EditNote, contentDescription = null) },
-                            label = { Text("笔记") },
-                            selected = selectedTab == MainTab.NOTES,
-                            onClick = { selectedTab = MainTab.NOTES }
-                        )
-                        NavigationBarItem(
-                            icon = { Icon(Icons.Default.BarChart, contentDescription = null) },
-                            label = { Text("统计") },
-                            selected = selectedTab == MainTab.TIME,
-                            onClick = { selectedTab = MainTab.TIME }
-                        )
+                    Box(Modifier.fillMaxWidth()) {
+                        NavigationBar(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                            tonalElevation = NavigationBarDefaults.Elevation
+                        ) {
+                            MainTab.entries.forEach { tab ->
+                                val isSelected = selectedTab == tab
+                                NavigationBarItem(
+                                    selected = isSelected,
+                                    onClick = { selectedTab = tab },
+                                    icon = {
+                                        Icon(
+                                            imageVector = when (tab) {
+                                                MainTab.SOFTWARE -> Icons.Default.Apps
+                                                MainTab.NOTES -> Icons.Default.EditNote
+                                                MainTab.TIME -> Icons.Default.BarChart
+                                            },
+                                            contentDescription = tab.label
+                                        )
+                                    },
+                                    label = { Text(tab.label) },
+                                    colors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        indicatorColor = Color.Transparent
+                                    )
+                                )
+                            }
+                        }
+                        // 指示器横线覆盖层（补偿 NavigationBar 默认 12dp 左右内边距）
+                        val tabCount = MainTab.entries.size
+                        val selectedIndex = selectedTab.ordinal
+                        BoxWithConstraints(
+                            modifier = Modifier.matchParentSize().padding(bottom = 48.dp)
+                        ) {
+                            if (maxWidth != 0.dp) {
+                                val lineWidth = 70.dp
+                                val gapSpacing = 8.dp
+                                val itemWidth = (maxWidth - gapSpacing * (tabCount - 1)) / tabCount
+                                val iconCenterX = itemWidth * (selectedIndex + 0.5f) + gapSpacing * selectedIndex
+                                val targetOffset = iconCenterX - lineWidth / 2
+                                val animatedOffset by animateDpAsState(
+                                    targetValue = targetOffset,
+                                    animationSpec = tween(200),
+                                    label = "navLineOffset"
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .offset(x = animatedOffset)
+                                        .width(lineWidth)
+                                        .height(3.dp)
+                                        .clip(RoundedCornerShape(1.5.dp))
+                                        .background(MaterialTheme.colorScheme.primary)
+                                )
+                            }
+                        }
                     }
                 }
             }
         },
         floatingActionButton = {
+            val fabVisible = selectedTab != MainTab.TIME && !selectionMode
+            // 记住上次可见时的 Tab，退出动画期间保持内容不消失
+            var fabContent by remember { mutableStateOf(MainTab.SOFTWARE) }
+            if (fabVisible) fabContent = selectedTab
             val fabProgress by animateFloatAsState(
-                targetValue = if (selectionMode) 0f else 1f,
+                targetValue = if (fabVisible) 1f else 0f,
                 animationSpec = tween(200),
                 label = "fabProgress"
             )
-            Box(modifier = Modifier.graphicsLayer {
-                scaleX = fabProgress
-                scaleY = fabProgress
-                alpha = fabProgress
-            }) {
-                when (selectedTab) {
-                    MainTab.SOFTWARE -> {
-                        var showAddSoftware by remember { mutableStateOf(false) }
-                        Box {
+            if (fabProgress > 0f || fabVisible) {
+                Box(modifier = Modifier.graphicsLayer {
+                    scaleX = fabProgress
+                    scaleY = fabProgress
+                    alpha = fabProgress
+                }) {
+                    when (fabContent) {
+                        MainTab.SOFTWARE -> {
+                            var showAddSoftware by remember { mutableStateOf(false) }
+                            Box {
+                                FloatingActionButton(
+                                    onClick = { showAddSoftware = true },
+                                    shape = MaterialTheme.shapes.medium,
+                                    elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
+                                ) {
+                                    Icon(Icons.Default.Add, contentDescription = "添加软件")
+                                }
+                                if (showAddSoftware) {
+                                    AddSoftwareDialog(
+                                        repository = repository,
+                                        onDismiss = { showAddSoftware = false }
+                                    )
+                                }
+                            }
+                        }
+                        MainTab.NOTES -> {
                             FloatingActionButton(
-                                onClick = { showAddSoftware = true },
+                                onClick = { navController.navigate(Routes.NoteEditor.create()) },
                                 shape = MaterialTheme.shapes.medium,
                                 elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = "添加软件")
-                            }
-                            if (showAddSoftware) {
-                                AddSoftwareDialog(
-                                    repository = repository,
-                                    onDismiss = { showAddSoftware = false }
-                                )
+                                Icon(Icons.Default.Edit, contentDescription = "写笔记")
                             }
                         }
+                        else -> { }
                     }
-                    MainTab.NOTES -> {
-                        FloatingActionButton(
-                            onClick = { navController.navigate(Routes.NoteEditor.create()) },
-                            shape = MaterialTheme.shapes.medium,
-                            elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-                        ) {
-                            Icon(Icons.Default.Edit, contentDescription = "写笔记")
-                        }
-                    }
-                    MainTab.TIME -> { }
                 }
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding).fillMaxSize()) {
-            when (selectedTab) {
+        AnimatedContent(
+            targetState = selectedTab,
+            modifier = Modifier.padding(padding).fillMaxSize(),
+            transitionSpec = {
+                // 统计页不做任何动画（还没做完，避免干扰）
+                if (targetState == MainTab.TIME || initialState == MainTab.TIME) {
+                    fadeIn(animationSpec = tween(0)) togetherWith fadeOut(animationSpec = tween(0))
+                } else {
+                    (slideInVertically(
+                        animationSpec = tween(200),
+                        initialOffsetY = { it / 40 }
+                    ) + fadeIn(animationSpec = tween(200)))
+                        .togetherWith(fadeOut(animationSpec = tween(150)))
+                }
+            },
+            label = "tabContent"
+        ) { tab ->
+            when (tab) {
                 MainTab.SOFTWARE -> SoftwareListScreen(
                     repository = repository,
                     onSoftwareClick = { softwareId ->

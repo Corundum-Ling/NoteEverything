@@ -16,6 +16,9 @@ local.properties
 !/docs/实施计划.md
 /app/release/
 CLAUDE.md
-.gitmsg  
-.gitmessage  
-.gitmsg  
+.gitmsg
+.gitmessage
+.gitmsg
+
+# Open Design 设计系统文档（不跟踪，只在本地 Open Design 使用）
+/design-systems/
