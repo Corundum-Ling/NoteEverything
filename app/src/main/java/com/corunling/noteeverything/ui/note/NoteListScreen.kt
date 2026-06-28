@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
@@ -69,6 +70,8 @@ fun NoteListScreen(
 
     // 选中 ID
     var selectedIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var showTagPanel by remember { mutableStateOf(false) }
+    var batchTags by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // 通知父级选择状态变化（不清空时不退出选择模式）
     fun updateSelection(newIds: Set<Long>) {
@@ -78,7 +81,10 @@ fun NoteListScreen(
 
     // 父级强制退出选择时清空本地状态
     LaunchedEffect(selectionMode) {
-        if (!selectionMode) selectedIds = emptySet()
+        if (!selectionMode) {
+            selectedIds = emptySet()
+            showTagPanel = false
+        }
     }
 
     // 注册全选（切换）/取消回调
@@ -124,7 +130,13 @@ fun NoteListScreen(
                 onActionConsumed()
             }
             "delete" -> { showDeleteConfirm = true }
-            "tags" -> { onActionConsumed() }
+            "tags" -> {
+                scope.launch {
+                    batchTags = repository.getTagsUnion(selectedIds.toList())
+                    showTagPanel = true
+                }
+                onActionConsumed()
+            }
             "export" -> { showExportPicker = true }
         }
     }
@@ -423,8 +435,57 @@ fun NoteListScreen(
             }
             }
         }
+
+    // ── 悬浮标签卡片 ──
+    val keyboardController = LocalSoftwareKeyboardController.current
+    Box(Modifier.fillMaxSize()) {
+        if (showTagPanel) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        keyboardController?.hide()
+                        showTagPanel = false
+                    }
+            )
+        }
+        AnimatedVisibility(
+            visible = showTagPanel,
+            enter = slideInVertically(animationSpec = tween(250)) { it + 200 } + fadeIn(tween(150)),
+            exit = slideOutVertically(animationSpec = tween(250)) { it + 200 } + fadeOut(tween(150)),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 120.dp, start = 40.dp, end = 40.dp)
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                com.corunling.noteeverything.ui.components.TagChipPanel(
+                    tags = batchTags,
+                    onAddTag = { tag ->
+                        scope.launch {
+                            repository.addTagsToNotes(selectedIds.toList(), listOf(tag))
+                            batchTags = repository.getTagsUnion(selectedIds.toList())
+                        }
+                    },
+                    onRemoveTag = { tag ->
+                        scope.launch {
+                            repository.removeTagsFromNotes(selectedIds.toList(), listOf(tag))
+                            batchTags = repository.getTagsUnion(selectedIds.toList())
+                        }
+                    }
+                )
+            }
+        }
     }
-}
+    }
+    }
 
 // ═══ 笔记卡片组件 ═══
 

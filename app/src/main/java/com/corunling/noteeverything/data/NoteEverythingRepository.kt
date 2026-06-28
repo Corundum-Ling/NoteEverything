@@ -205,6 +205,78 @@ class NoteEverythingRepository(
     }
 
     // ════════════════════════════════════════════════
+    // 标签操作
+    // ════════════════════════════════════════════════
+
+    /** 解析逗号分隔的标签字符串为列表 */
+    fun parseTags(tagsStr: String?): List<String> {
+        if (tagsStr.isNullOrBlank()) return emptyList()
+        return tagsStr.split(",").map { it.trim() }.filter { it.isNotBlank() }.distinct()
+    }
+
+    /** 将标签列表合并为逗号分隔字符串（与已有标签去重合并） */
+    fun mergeTags(existingTags: String?, newTags: List<String>): String {
+        val existing = parseTags(existingTags).toMutableSet()
+        existing.addAll(newTags.map { it.trim().filter { c -> c != ',' } }.filter { it.isNotBlank() })
+        return existing.joinToString(",")
+    }
+
+    /** 从已有标签中移除指定标签 */
+    fun removeTagsFromStr(existingTags: String?, tagsToRemove: List<String>): String {
+        val removeSet = tagsToRemove.map { it.trim() }.filter { it.isNotBlank() }.toSet()
+        val existing = parseTags(existingTags).filter { it !in removeSet }
+        return existing.joinToString(",")
+    }
+
+    /**
+     * 批量给笔记添加标签（追加去重）
+     * @param noteIds 笔记 ID 列表
+     * @param tags 要添加的标签列表
+     */
+    suspend fun addTagsToNotes(noteIds: List<Long>, tags: List<String>) {
+        val cleanTags = tags.map { it.trim().filter { c -> c != ',' } }.filter { it.isNotBlank() }
+        if (cleanTags.isEmpty()) return
+        val notes = noteDao.getByIds(noteIds)
+        notes.forEach { note ->
+            val merged = mergeTags(note.tags, cleanTags)
+            noteDao.updateTags(note.id, merged.ifEmpty { null })
+        }
+    }
+
+    /**
+     * 批量从笔记移除标签
+     * @param noteIds 笔记 ID 列表
+     * @param tags 要移除的标签列表
+     */
+    suspend fun removeTagsFromNotes(noteIds: List<Long>, tags: List<String>) {
+        val cleanTags = tags.map { it.trim() }.filter { it.isNotBlank() }
+        if (cleanTags.isEmpty()) return
+        val notes = noteDao.getByIds(noteIds)
+        notes.forEach { note ->
+            val removed = removeTagsFromStr(note.tags, cleanTags)
+            noteDao.updateTags(note.id, removed.ifEmpty { null })
+        }
+    }
+
+    /**
+     * 获取多篇笔记上所有标签的并集
+     */
+    suspend fun getTagsUnion(noteIds: List<Long>): List<String> {
+        val notes = noteDao.getByIds(noteIds)
+        val tagSet = mutableSetOf<String>()
+        notes.forEach { note ->
+            tagSet.addAll(parseTags(note.tags))
+        }
+        return tagSet.toList().sorted()
+    }
+
+    /** 获取单篇笔记的标签列表 */
+    suspend fun getTagsForNote(noteId: Long): List<String> {
+        val note = noteDao.getById(noteId)
+        return parseTags(note?.tags)
+    }
+
+    // ════════════════════════════════════════════════
     // 批量操作
     // ════════════════════════════════════════════════
 

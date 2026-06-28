@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Base64
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
@@ -14,6 +15,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -71,12 +74,43 @@ fun NoteEditorScreen(
     var timestamp by remember { mutableStateOf(DateTimeUtils.now()) }
     val scope = rememberCoroutineScope(); val context = LocalContext.current
 
+    // 标签 & 锁定状态
+    var currentNoteId by remember { mutableStateOf(noteId) }
+    var showTagPanel by remember { mutableStateOf(false) }
+    var noteTags by remember { mutableStateOf<List<String>>(emptyList()) }
+    var isLocked by remember { mutableStateOf(false) }
+
     // 导出状态
     var exportTargetFormat by remember { mutableStateOf<String?>(null) } // "html" / "doc" / null
     var exportContent by remember { mutableStateOf("") } // 编辑器实时内容快照
     val editorState = rememberRichTextEditorState()
 
-    LaunchedEffect(noteId) { if (noteId != null) { val e = repository.getNoteById(noteId); if (e != null) { initialHtml = e.content; content = e.content; selectedSoftwareId = e.softwareId; timestamp = e.timestamp } } }
+    LaunchedEffect(noteId) { if (noteId != null) { val e = repository.getNoteById(noteId); if (e != null) { initialHtml = e.content; content = e.content; selectedSoftwareId = e.softwareId; timestamp = e.timestamp; isLocked = e.locked; noteTags = repository.parseTags(e.tags) } else { currentNoteId = null } } else { currentNoteId = null } }
+
+    // 自动保存（1.5s 防抖，内容变化后延迟保存）
+    LaunchedEffect(content) {
+        if (content == initialHtml) return@LaunchedEffect
+        delay(1500)
+        if (isSaving || content == initialHtml) return@LaunchedEffect
+        isSaving = true
+        scope.launch {
+            try {
+                val html = content
+                val tagsStr = noteTags.joinToString(",").ifEmpty { null }
+                if (currentNoteId != null) {
+                    val e = repository.getNoteById(currentNoteId!!)
+                    if (e != null) {
+                        repository.updateNote(e.copy(softwareId = selectedSoftwareId, content = html, timestamp = timestamp, type = if (selectedSoftwareId != null) "software" else "free", tags = tagsStr))
+                    }
+                } else {
+                    val newId = repository.createNote(softwareId = selectedSoftwareId, content = html, timestamp = timestamp, tags = tagsStr)
+                    currentNoteId = newId
+                }
+                initialHtml = html
+            } catch (_: Exception) {}
+            isSaving = false
+        }
+    }
     val allSoftware by repository.getAllSoftware().collectAsState(initial = emptyList())
 
     val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? -> uri?.let { val b64 = uriToBase64(context, it); if (b64 != null) editorState.insertImageBase64(b64, "img_${System.currentTimeMillis()}.jpg") } }
@@ -125,7 +159,7 @@ fun NoteEditorScreen(
     LaunchedEffect(selectedSoftwareId) { if (selectedSoftwareId != null) repository.getTimeRecordsBySoftware(selectedSoftwareId!!).collect { allTimeRecords = it.sortedByDescending { r -> r.startTime } } else allTimeRecords = emptyList() }
     LaunchedEffect(noteId, allTimeRecords, linksInitialized) { if (!linksInitialized) { if (noteId != null) repository.getLinksForNote(noteId).collect { linkedRecordIds = it.map { l -> l.timeRecordId }.toSet() } else if (selectedSoftwareId != null) linkedRecordIds = allTimeRecords.map { it.id }.toSet(); linksInitialized = true } }
 
-    val title = if (noteId != null) "编辑笔记" else "新建笔记"; val selectedSoftware = allSoftware.find { it.id == selectedSoftwareId }
+    val selectedSoftware = allSoftware.find { it.id == selectedSoftwareId }
 
     fun startExport(format: String) {
         editorState.requestContent { html ->
@@ -142,8 +176,6 @@ fun NoteEditorScreen(
     var fmtUL by remember { mutableStateOf(false) }; var fmtOL by remember { mutableStateOf(false) }; var fmtOLT by remember { mutableStateOf("1") }
     var fmtSize by remember { mutableStateOf("3") }; var fmtColor by remember { mutableStateOf("#000000") }
     fun parseFmt(json: String) { try { val o = org.json.JSONObject(json); fmtB = o.optBoolean("bold"); fmti = o.optBoolean("italic"); fmtU = o.optBoolean("underline"); fmtS = o.optBoolean("strikeThrough"); fmtAL = o.optBoolean("justifyLeft"); fmtAC = o.optBoolean("justifyCenter"); fmtAR = o.optBoolean("justifyRight"); fmtUL = o.optBoolean("insertUnorderedList"); fmtOL = o.optBoolean("insertOrderedList"); fmtOLT = o.optString("orderedListType", "1"); fmtSize = o.optString("fontSize", "16px"); fmtColor = o.optString("foreColor", "#000000") } catch (_: Exception) {} }
-
-    fun save() { if (isSaving) return; isSaving = true; editorState.requestContent { html -> content = html; scope.launch { try { val id: Long? = if (noteId != null) { val e = repository.getNoteById(noteId); if (e != null) { repository.updateNote(e.copy(softwareId = selectedSoftwareId, content = html, timestamp = timestamp, type = if (selectedSoftwareId != null) "software" else "free")); noteId } else null } else repository.createNote(softwareId = selectedSoftwareId, content = html, timestamp = timestamp); if (id != null) repository.setNoteLinks(id, linkedRecordIds.toList()) } catch (_: Exception) { isSaving = false; return@launch }; navController.popBackStack() } } }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
     if (showDeleteConfirm) {
@@ -178,25 +210,52 @@ fun NoteEditorScreen(
     fun onEditorTap() { when (panelState) { PanelState.IDLE -> { panelState = PanelState.TYPING; editorState.focusEditor() }; PanelState.TOOLS -> { editorState.focusEditor(); scope.launch { delay(400); panelState = PanelState.TYPING; activeToolCategory = null } }; PanelState.TYPING -> {} } }
     LaunchedEffect(Unit) { if (noteId == null) { panelState = PanelState.TYPING; editorState.focusEditor() } }
 
+    // 返回键关闭标签面板
+    BackHandler(enabled = showTagPanel) { showTagPanel = false }
+
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(title) },
-                navigationIcon = { IconButton(onClick = { navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") } },
+                title = {},
+                navigationIcon = { IconButton(onClick = { showTagPanel = false; navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 actions = {
-                    // 导出按钮
-                    IconButton(onClick = { exportTargetFormat = "select" }) {
-                        Icon(Icons.Default.FileDownload, contentDescription = "导出")
-                    }
-                    // 删除按钮（仅编辑模式显示）
-                    if (noteId != null) {
-                        IconButton(onClick = { showDeleteConfirm = true }) {
-                            Icon(Icons.Default.Delete, contentDescription = "删除", tint = MaterialTheme.colorScheme.error)
+                    var showMenu by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = { showMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = "更多")
+                        }
+                        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                            DropdownMenuItem(
+                                text = { Text("标签管理") },
+                                onClick = { showMenu = false; showTagPanel = true }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("导出") },
+                                onClick = { showMenu = false; exportTargetFormat = "select" }
+                            )
+                            if (noteId != null) {
+                                HorizontalDivider()
+                                DropdownMenuItem(
+                                    text = { Text(if (isLocked) "解锁" else "锁定") },
+                                    onClick = {
+                                        showMenu = false
+                                        scope.launch {
+                                            val e = if (noteId != null) repository.getNoteById(noteId) else null
+                                            if (e != null) {
+                                                repository.updateNote(e.copy(locked = !e.locked))
+                                                isLocked = !e.locked
+                                            }
+                                        }
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("删除", color = MaterialTheme.colorScheme.error) },
+                                    onClick = { showMenu = false; showDeleteConfirm = true }
+                                )
+                            }
                         }
                     }
-                    // 保存按钮
-                    TextButton(onClick = { save() }, enabled = !isSaving, shape = RoundedCornerShape(16.dp)) { Surface(shape = RoundedCornerShape(16.dp), color = MaterialTheme.colorScheme.primary) { Text(if (isSaving) "保存中..." else "保存", modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp), color = MaterialTheme.colorScheme.onPrimary) } }
                 }
             )
         }
@@ -254,7 +313,7 @@ fun NoteEditorScreen(
             Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
                 RichTextEditor(state = editorState, initialContent = initialHtml, onContentChanged = { content = it; editorState.queryFormatState() }, onFormatChanged = { parseFmt(it) }, onTap = { onEditorTap() }, onRequestFocus = { panelState = PanelState.TYPING; activeToolCategory = null; editorState.focusEditor() }, modifier = Modifier.fillMaxSize())
             }
-            val targetH = when { panelState == PanelState.TOOLS -> maxOf(imeHeight, 220.dp); lockHeight -> maxOf(imeHeight, 220.dp); else -> imeHeight }
+            val targetH = when { showTagPanel -> 0.dp; panelState == PanelState.TOOLS -> maxOf(imeHeight, 220.dp); lockHeight -> maxOf(imeHeight, 220.dp); else -> imeHeight }
             val bottomH by animateDpAsState(targetH, tween(100), label = "bh")
             val im = panelState == PanelState.TOOLS
             Surface(Modifier.fillMaxWidth(), color = BarBg) {
@@ -305,6 +364,76 @@ fun NoteEditorScreen(
                 TextButton(onClick = { exportTargetFormat = null }) { Text("取消") }
             }
         )
+    }
+
+    // ── 悬浮标签面板 ──
+    val tagCardBottom by animateDpAsState(
+        targetValue = if (panelState == PanelState.TOOLS || activeToolCategory != null) maxOf(imeHeight, 220.dp) + 16.dp
+                      else imeHeight + 72.dp,
+        animationSpec = tween(200),
+        label = "tagCardBottom"
+    )
+    Box(Modifier.fillMaxSize()) {
+        if (showTagPanel) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        if (imeHeight >= 10.dp) keyboardController?.hide()
+                        else showTagPanel = false
+                    }
+            )
+        }
+        AnimatedVisibility(
+            visible = showTagPanel,
+            enter = slideInVertically(animationSpec = tween(250)) { it + 200 } + fadeIn(tween(150)),
+            exit = slideOutVertically(animationSpec = tween(250)) { it + 200 } + fadeOut(tween(150)),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = 40.dp, end = 40.dp, bottom = tagCardBottom)
+        ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            com.corunling.noteeverything.ui.components.TagChipPanel(
+                tags = noteTags,
+                onAddTag = { tag ->
+                    scope.launch {
+                        if (currentNoteId != null) {
+                            val e = repository.getNoteById(currentNoteId!!)
+                            if (e != null) {
+                                val merged = repository.mergeTags(e.tags, listOf(tag))
+                                repository.updateNote(e.copy(tags = merged.ifEmpty { null }))
+                                noteTags = repository.parseTags(merged)
+                            }
+                        } else {
+                            noteTags = (noteTags + tag).distinct()
+                        }
+                    }
+                },
+                onRemoveTag = { tag ->
+                    scope.launch {
+                        if (currentNoteId != null) {
+                            val e = repository.getNoteById(currentNoteId!!)
+                            if (e != null) {
+                                val removed = repository.removeTagsFromStr(e.tags, listOf(tag))
+                                repository.updateNote(e.copy(tags = removed.ifEmpty { null }))
+                                noteTags = repository.parseTags(removed)
+                            }
+                        } else {
+                            noteTags = noteTags - tag
+                        }
+                    }
+                }
+            )
+        }
+    }
     }
 }
 

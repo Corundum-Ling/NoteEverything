@@ -52,6 +52,10 @@ interface NoteDao {
     @Query("DELETE FROM notes")
     suspend fun deleteAll()
 
+    // 批量查询（用于批量操作标签）
+    @Query("SELECT * FROM notes WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<NoteEntity>
+
     // 置顶/取消置顶
     @Query("UPDATE notes SET pinned = :pinned WHERE id = :id")
     suspend fun updatePinned(id: Long, pinned: Boolean)
@@ -59,4 +63,8 @@ interface NoteDao {
     // 锁定/解锁
     @Query("UPDATE notes SET locked = :locked WHERE id = :id")
     suspend fun updateLocked(id: Long, locked: Boolean)
+
+    // 批量更新标签
+    @Query("UPDATE notes SET tags = :tags WHERE id = :id")
+    suspend fun updateTags(id: Long, tags: String?)
 }
