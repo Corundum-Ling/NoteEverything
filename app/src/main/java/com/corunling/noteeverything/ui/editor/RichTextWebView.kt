@@ -165,19 +165,12 @@ fun RichTextEditor(
     onRequestFocus: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    // 使用 LaunchedEffect（而非 AndroidView.update）设置初始内容，
-    // 避免页面加载与数据加载交错时的竞态问题。
-    //
-    // 触发时机 1：页面加载完成时设置内容（若内容已就绪）
-    LaunchedEffect(state.isPageLoaded) {
-        if (state.isPageLoaded && initialContent.isNotEmpty()) {
-            state.setContent(initialContent)
-        }
-    }
-    // 触发时机 2：初始内容就绪时设置（若页面已加载）
-    LaunchedEffect(initialContent) {
-        if (state.isPageLoaded && initialContent.isNotEmpty()) {
-            state.setContent(initialContent)
+    // 仅首次设置初始内容（防止 auto-save 更新 initialHtml 后重置编辑器）
+    val initialContentSet = remember { mutableStateOf(false) }
+    LaunchedEffect(state.isPageLoaded, initialContent) {
+        if (!initialContentSet.value && state.isPageLoaded) {
+            if (initialContent.isNotEmpty()) state.setContent(initialContent)
+            initialContentSet.value = true
         }
     }
 

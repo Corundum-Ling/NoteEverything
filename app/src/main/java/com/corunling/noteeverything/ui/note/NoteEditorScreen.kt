@@ -55,6 +55,7 @@ import com.corunling.noteeverything.ui.theme.CategoryColors
 import com.corunling.noteeverything.util.DateTimeUtils
 import com.corunling.noteeverything.util.NoteExporter
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -82,30 +83,33 @@ fun NoteEditorScreen(
     var exportTargetFormat by remember { mutableStateOf<String?>(null) } // "html" / "doc" / null
     var exportContent by remember { mutableStateOf("") } // 编辑器实时内容快照
     val editorState = rememberRichTextEditorState()
+    val saveJob = remember { mutableStateOf<Job?>(null) }
+    var pendingSaveContent by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(noteId) { if (noteId != null) { val e = repository.getNoteById(noteId); if (e != null) { initialHtml = e.content; content = e.content; selectedSoftwareId = e.softwareId; timestamp = e.timestamp; isLocked = e.locked; noteTags = repository.parseTags(e.tags) } else { currentNoteId = null } } else { currentNoteId = null } }
 
-    // 自动保存（1.5s 防抖，直接用 LaunchedEffect 协程，不用 scope.launch）
-    LaunchedEffect(content) {
-        if (content == initialHtml || isSaving) return@LaunchedEffect
-        delay(1500)
-        if (content == initialHtml) return@LaunchedEffect
-        isSaving = true
-        try {
-            val html = content
-            val tagsStr = noteTags.joinToString(",").ifEmpty { null }
-            if (currentNoteId != null) {
-                val e = repository.getNoteById(currentNoteId!!)
-                if (e != null) {
-                    repository.updateNote(e.copy(softwareId = selectedSoftwareId, content = html, timestamp = timestamp, type = if (selectedSoftwareId != null) "software" else "free", tags = tagsStr))
+    fun doAutoSave(htmlToSave: String = content) {
+        pendingSaveContent = htmlToSave
+        if (isSaving) return
+        saveJob.value?.cancel()
+        saveJob.value = scope.launch {
+            delay(300)
+            val toSave = pendingSaveContent ?: return@launch
+            if (toSave == initialHtml) return@launch
+            isSaving = true
+            try {
+                val tagsStr = noteTags.joinToString(",").ifEmpty { null }
+                if (currentNoteId != null) {
+                    val e = repository.getNoteById(currentNoteId!!)
+                    if (e != null) repository.updateNote(e.copy(softwareId = selectedSoftwareId, content = toSave, timestamp = timestamp, type = if (selectedSoftwareId != null) "software" else "free", tags = tagsStr))
+                } else {
+                    currentNoteId = repository.createNote(softwareId = selectedSoftwareId, content = toSave, timestamp = timestamp, tags = tagsStr)
                 }
-            } else {
-                val newId = repository.createNote(softwareId = selectedSoftwareId, content = html, timestamp = timestamp, tags = tagsStr)
-                currentNoteId = newId
-            }
-            initialHtml = html
-        } catch (_: Exception) {}
-        isSaving = false
+                initialHtml = toSave
+            } catch (_: Exception) {}
+            isSaving = false
+            if (pendingSaveContent != null && pendingSaveContent != initialHtml) doAutoSave()
+        }
     }
     val allSoftware by repository.getAllSoftware().collectAsState(initial = emptyList())
 
@@ -255,6 +259,12 @@ fun NoteEditorScreen(
                 navigationIcon = { IconButton(onClick = { showTagPanel = false; navController.popBackStack() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回") } },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                 actions = {
+                    IconButton(onClick = { editorState.evalJs("document.execCommand('undo', false, null)") }) {
+                        Icon(Icons.Default.Undo, contentDescription = "撤回")
+                    }
+                    IconButton(onClick = { editorState.evalJs("document.execCommand('redo', false, null)") }) {
+                        Icon(Icons.Default.Redo, contentDescription = "重做")
+                    }
                     var showMenu by remember { mutableStateOf(false) }
                     Box {
                         IconButton(onClick = { showMenu = true }) {
@@ -349,7 +359,7 @@ fun NoteEditorScreen(
                 Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 16.dp).background(BorderC))
                 // 编辑器（weight 1f → 吸收弹性空间）
                 Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                    RichTextEditor(state = editorState, initialContent = initialHtml, onContentChanged = { content = it; editorState.queryFormatState() }, onFormatChanged = { parseFmt(it) }, onTap = { onEditorTap() }, onRequestFocus = { onEditorTap() }, modifier = Modifier.fillMaxSize())
+                    RichTextEditor(state = editorState, initialContent = initialHtml, onContentChanged = { content = it; editorState.queryFormatState(); doAutoSave(it) }, onFormatChanged = { parseFmt(it) }, onTap = { onEditorTap() }, onRequestFocus = { onEditorTap() }, modifier = Modifier.fillMaxSize())
                 }
                 // 格式工具栏（固定高度，被 imePadding 和面板推上去）
                 val im = panelState == PanelState.TOOLS

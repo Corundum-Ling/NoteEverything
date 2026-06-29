@@ -121,7 +121,7 @@
     if (debounceTimer) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(function() {
       if (window.RichEditorBridge) {
-        window.RichEditorBridge.onContentChanged(editor.innerHTML);
+        window.RichEditorBridge.onContentChangedJs(editor.innerHTML);
       }
     }, 50);
   }
@@ -184,6 +184,7 @@
     } catch(e) {
       editor.innerHTML = json;
     }
+    isInternalChange = false;
   }
 
   // 设置编辑器内容
@@ -341,7 +342,7 @@
       }
     } catch(e) { state.orderedListType = '1'; }
     if (window.RichEditorBridge) {
-      window.RichEditorBridge.onFormatState(JSON.stringify(state));
+      window.RichEditorBridge.onFormatStateJs(JSON.stringify(state));
     }
   }
 

@@ -21,17 +21,17 @@ class RichEditorBridge(
     private val mainHandler = Handler(Looper.getMainLooper())
 
     @JavascriptInterface
-    fun onContentChanged(html: String) {
+    fun onContentChangedJs(html: String) {
         mainHandler.post { onContentChanged(html) }
     }
 
     @JavascriptInterface
-    fun onFormatState(json: String) {
+    fun onFormatStateJs(json: String) {
         mainHandler.post { onFormatState?.invoke(json) }
     }
 
     @JavascriptInterface
-    fun onRequestFocus() {
+    fun onRequestFocusJs() {
         mainHandler.post { onRequestFocus?.invoke() }
     }
 }
