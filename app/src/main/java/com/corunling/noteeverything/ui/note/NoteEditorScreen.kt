@@ -20,10 +20,9 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -86,29 +85,27 @@ fun NoteEditorScreen(
 
     LaunchedEffect(noteId) { if (noteId != null) { val e = repository.getNoteById(noteId); if (e != null) { initialHtml = e.content; content = e.content; selectedSoftwareId = e.softwareId; timestamp = e.timestamp; isLocked = e.locked; noteTags = repository.parseTags(e.tags) } else { currentNoteId = null } } else { currentNoteId = null } }
 
-    // 自动保存（1.5s 防抖，内容变化后延迟保存）
+    // 自动保存（1.5s 防抖，直接用 LaunchedEffect 协程，不用 scope.launch）
     LaunchedEffect(content) {
-        if (content == initialHtml) return@LaunchedEffect
+        if (content == initialHtml || isSaving) return@LaunchedEffect
         delay(1500)
-        if (isSaving || content == initialHtml) return@LaunchedEffect
+        if (content == initialHtml) return@LaunchedEffect
         isSaving = true
-        scope.launch {
-            try {
-                val html = content
-                val tagsStr = noteTags.joinToString(",").ifEmpty { null }
-                if (currentNoteId != null) {
-                    val e = repository.getNoteById(currentNoteId!!)
-                    if (e != null) {
-                        repository.updateNote(e.copy(softwareId = selectedSoftwareId, content = html, timestamp = timestamp, type = if (selectedSoftwareId != null) "software" else "free", tags = tagsStr))
-                    }
-                } else {
-                    val newId = repository.createNote(softwareId = selectedSoftwareId, content = html, timestamp = timestamp, tags = tagsStr)
-                    currentNoteId = newId
+        try {
+            val html = content
+            val tagsStr = noteTags.joinToString(",").ifEmpty { null }
+            if (currentNoteId != null) {
+                val e = repository.getNoteById(currentNoteId!!)
+                if (e != null) {
+                    repository.updateNote(e.copy(softwareId = selectedSoftwareId, content = html, timestamp = timestamp, type = if (selectedSoftwareId != null) "software" else "free", tags = tagsStr))
                 }
-                initialHtml = html
-            } catch (_: Exception) {}
-            isSaving = false
-        }
+            } else {
+                val newId = repository.createNote(softwareId = selectedSoftwareId, content = html, timestamp = timestamp, tags = tagsStr)
+                currentNoteId = newId
+            }
+            initialHtml = html
+        } catch (_: Exception) {}
+        isSaving = false
     }
     val allSoftware by repository.getAllSoftware().collectAsState(initial = emptyList())
 
@@ -266,7 +263,7 @@ fun NoteEditorScreen(
                         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                             DropdownMenuItem(
                                 text = { Text("标签管理") },
-                                onClick = { showMenu = false; showTagPanel = true }
+                                onClick = { showMenu = false; panelState = PanelState.IDLE; activeToolCategory = null; showTagPanel = true }
                             )
                             DropdownMenuItem(
                                 text = { Text("导出") },
@@ -481,8 +478,8 @@ private val TxtS @Composable get() = Color(0xFF6B7280); private val TxtT @Compos
 @Composable private fun Tp(es: RichTextEditorState, fB: Boolean, fI: Boolean, fU: Boolean, fS: Boolean, fSize: String, fColor: String) { Column(Modifier.fillMaxSize().padding(horizontal = 10.dp, vertical = 10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { Crd(Modifier.weight(1f)) { Row(Modifier.fillMaxSize()) { Tb("B", modifier = Modifier.weight(1f).fillMaxHeight(), bold = true, active = fB) { es.applyFormat("bold") }; Dv(); Tb("I", modifier = Modifier.weight(1f).fillMaxHeight(), italic = true, active = fI) { es.applyFormat("italic") }; Dv(); Tb("U", modifier = Modifier.weight(1f).fillMaxHeight(), underline = true, active = fU) { es.applyFormat("underline") }; Dv(); Tb("S", modifier = Modifier.weight(1f).fillMaxHeight(), strike = true, active = fS) { es.applyFormat("strikeThrough") } } }; Crd(Modifier.weight(1f)) { Fs(es, fSize) }; Crd(Modifier.weight(1f)) { Cw(es, fColor) } } }
 @Composable private fun Dv() { Box(Modifier.width(1.dp).fillMaxHeight().background(BorderC)) }
 @Composable private fun Crd(modifier: Modifier = Modifier, content: @Composable () -> Unit) { Surface(shape = RoundedCornerShape(12.dp), color = Surf, shadowElevation = 2.dp, tonalElevation = 2.dp, modifier = modifier, content = content) }
-@Composable private fun Fs(es: RichTextEditorState, fSize: String) { val items = listOf("8" to "8px","10" to "10px","12" to "12px","14" to "14px","16" to "16px","18" to "18px","20" to "20px","24" to "24px","28" to "28px","36" to "36px","48" to "48px"); val sel = items.indexOfFirst { it.second == fSize }.let { if (it >= 0) it else 4 }; Column(Modifier.fillMaxSize().padding(start = 10.dp, top = 4.dp, bottom = 4.dp)) { Text("字号", style = MaterialTheme.typography.labelMedium, color = TxtT); Spacer(Modifier.height(4.dp)); LazyRow(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) { items(items.size) { i -> val isSel = i == sel; Surface(shape = RoundedCornerShape(8.dp), color = if (isSel) PriL else Color.Transparent) { Box(Modifier.clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { es.applyFormat("fontSize", items[i].second) }.padding(horizontal = 10.dp, vertical = 6.dp)) { Text(items[i].first, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal, color = if (isSel) Pri else TxtS, fontSize = 13.sp) } } } } } }
-@Composable private fun Cw(es: RichTextEditorState, fColor: String) { val cols = listOf("#FFFFFF","#CCCCCC","#888888","#444444","#000000","#FF4444","#FF8800","#FFCC00","#44CC44","#4488FF","#AA44FF","#FF44AA"); val sel = try { val hex = if (fColor.startsWith("rgb")) { val p = fColor.removePrefix("rgb(").removeSuffix(")").split(",").map { it.trim().toInt() }; java.lang.String.format("#%02X%02X%02X", p[0], p[1], p[2]) } else fColor; cols.indexOfFirst { it.equals(hex, ignoreCase = true) }.let { if (it >= 0) it else 0 } } catch (_: Exception) { 0 }; Column(Modifier.fillMaxSize().padding(start = 10.dp, top = 4.dp, bottom = 4.dp)) { Text("颜色", style = MaterialTheme.typography.labelMedium, color = TxtT); Spacer(Modifier.height(4.dp)); LazyRow(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { items(cols.size) { i -> val isSel = i == sel; Surface(shape = CircleShape, modifier = Modifier.size(if (isSel) 28.dp else 24.dp).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { es.applyFormat("foreColor", cols[i]) }, border = if (isSel) BorderStroke(2.dp, Pri) else null, color = Color(0xFFF0F0F0)) { Box(Modifier.padding(4.dp).fillMaxSize()) { Surface(shape = CircleShape, modifier = Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize().background(Color(android.graphics.Color.parseColor(cols[i])))) } } } } } } }
+@Composable private fun Fs(es: RichTextEditorState, fSize: String) { val items = remember { listOf("8" to "8px","10" to "10px","12" to "12px","14" to "14px","16" to "16px","18" to "18px","20" to "20px","24" to "24px","28" to "28px","36" to "36px","48" to "48px") }; val sel = items.indexOfFirst { it.second == fSize }.let { if (it >= 0) it else 4 }; Column(Modifier.fillMaxSize().padding(start = 10.dp, top = 4.dp, bottom = 4.dp)) { Text("字号", style = MaterialTheme.typography.labelMedium, color = TxtT); Spacer(Modifier.height(4.dp)); Row(Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) { items.forEachIndexed { i, item -> val isSel = i == sel; Surface(shape = RoundedCornerShape(8.dp), color = if (isSel) PriL else Color.Transparent) { Box(Modifier.clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { es.applyFormat("fontSize", item.second) }.padding(horizontal = 10.dp, vertical = 6.dp)) { Text(item.first, fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal, color = if (isSel) Pri else TxtS, fontSize = 13.sp) } } } } } }
+@Composable private fun Cw(es: RichTextEditorState, fColor: String) { val cols = remember { listOf("#FFFFFF","#CCCCCC","#888888","#444444","#000000","#FF4444","#FF8800","#FFCC00","#44CC44","#4488FF","#AA44FF","#FF44AA") }; val sel = try { val hex = if (fColor.startsWith("rgb")) { val p = fColor.removePrefix("rgb(").removeSuffix(")").split(",").map { it.trim().toInt() }; java.lang.String.format("#%02X%02X%02X", p[0], p[1], p[2]) } else fColor; cols.indexOfFirst { it.equals(hex, ignoreCase = true) }.let { if (it >= 0) it else 0 } } catch (_: Exception) { 0 }; Column(Modifier.fillMaxSize().padding(start = 10.dp, top = 4.dp, bottom = 4.dp)) { Text("颜色", style = MaterialTheme.typography.labelMedium, color = TxtT); Spacer(Modifier.height(4.dp)); Row(Modifier.fillMaxWidth().weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { cols.forEachIndexed { i, color -> val isSel = i == sel; Surface(shape = CircleShape, modifier = Modifier.size(if (isSel) 28.dp else 24.dp).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) { es.applyFormat("foreColor", color) }, border = if (isSel) BorderStroke(2.dp, Pri) else null, color = Color(0xFFF0F0F0)) { Box(Modifier.padding(4.dp).fillMaxSize()) { Surface(shape = CircleShape, modifier = Modifier.fillMaxSize()) { Box(Modifier.fillMaxSize().background(Color(android.graphics.Color.parseColor(color)))) } } } } } } }
 @Composable private fun Lp(es: RichTextEditorState, fUL: Boolean, fOL: Boolean, fOLT: String) { Crd(Modifier.padding(horizontal = 12.dp, vertical = 6.dp).fillMaxWidth()) { Column { Row(Modifier.height(54.dp).fillMaxWidth()) { Lc(Icons.AutoMirrored.Filled.FormatListBulleted, null, null, Modifier.weight(1f), fUL) { es.applyFormat("insertUnorderedList") }; Vd(); Lc(null, "1.", null, Modifier.weight(1f), fOL && fOLT == "1") { es.evalJs("changeOrderedListType('1')") } }; Box(Modifier.fillMaxWidth().height(1.dp).background(BorderC)); Row(Modifier.height(54.dp).fillMaxWidth()) { Lc(null, "a.", null, Modifier.weight(1f), fOL && fOLT == "a") { es.evalJs("changeOrderedListType('a')") }; Vd(); Lc(null, "A.", null, Modifier.weight(1f), fOL && fOLT == "A") { es.evalJs("changeOrderedListType('A')") } } } } }
 @Composable private fun Vd() { Box(Modifier.fillMaxHeight().width(1.dp).background(BorderC)) }
 @Composable private fun Lc(icon: ImageVector? = null, text: String? = null, label: String? = null, modifier: Modifier = Modifier, active: Boolean = false, onClick: () -> Unit) { val bg by animateColorAsState(if (active) PriL else Color.Transparent, tween(80), label = "lcBg"); Box(modifier.clip(RoundedCornerShape(8.dp)).background(bg).clickable(indication = null, interactionSource = remember { MutableInteractionSource() }, onClick = onClick)) { Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) { if (icon != null) Icon(icon, null, Modifier.size(20.dp), tint = TxtP); else Text(text ?: "?", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = TxtP); if (label != null) { Spacer(Modifier.height(2.dp)); Text(label, style = MaterialTheme.typography.labelSmall, color = TxtT) } } } }
