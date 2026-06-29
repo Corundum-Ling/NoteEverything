@@ -9,7 +9,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
@@ -197,21 +196,60 @@ fun NoteEditorScreen(
         )
     }
 
-    var panelState by remember { mutableStateOf(PanelState.IDLE) }; var activeToolCategory by remember { mutableStateOf<ToolbarCategory?>(null) }
-    val keyboardController = LocalSoftwareKeyboardController.current; val density = LocalDensity.current
+    // ═══════════════════════════════════════════════════════
+    //  状态管理（Jetchat InputSelector 模式）
+    // ═══════════════════════════════════════════════════════
+    var panelState by remember { mutableStateOf(PanelState.IDLE) }
+    var activeToolCategory by remember { mutableStateOf<ToolbarCategory?>(null) }
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val density = LocalDensity.current
     val imeHeight = with(density) { WindowInsets.ime.asPaddingValues().calculateBottomPadding().toPx().toDp() }
     var prevIme by remember { mutableStateOf(0.dp) }
-    LaunchedEffect(imeHeight) { val wasVisible = prevIme >= 10.dp; prevIme = imeHeight; if (wasVisible && imeHeight < 10.dp && panelState == PanelState.TYPING) panelState = PanelState.IDLE }
-    var leavingKey by remember { mutableStateOf(0L) }; var lockHeight by remember { mutableStateOf(false) }
-    LaunchedEffect(leavingKey) { if (leavingKey > 0L) { lockHeight = true; delay(350); lockHeight = false } }
-    fun triggerLeave() { if (imeHeight >= 10.dp) leavingKey++ }
 
-    fun onCategoryTap(cat: ToolbarCategory) { when (panelState) { PanelState.IDLE -> { panelState = PanelState.TOOLS; activeToolCategory = cat }; PanelState.TYPING -> { keyboardController?.hide(); panelState = PanelState.TOOLS; activeToolCategory = cat }; PanelState.TOOLS -> if (activeToolCategory == cat) { editorState.focusEditor(); scope.launch { delay(400); panelState = PanelState.TYPING; activeToolCategory = null } } else { activeToolCategory = cat } } }
-    fun onEditorTap() { when (panelState) { PanelState.IDLE -> { panelState = PanelState.TYPING; editorState.focusEditor() }; PanelState.TOOLS -> { editorState.focusEditor(); scope.launch { delay(400); panelState = PanelState.TYPING; activeToolCategory = null } }; PanelState.TYPING -> {} } }
-    LaunchedEffect(Unit) { if (noteId == null) { panelState = PanelState.TYPING; editorState.focusEditor() } }
+    // 面板高度动画（面板高度 ≈ 键盘高度 → 切换时工具栏保持原位）
+    val panelHeight by animateDpAsState(
+        targetValue = if (panelState == PanelState.TOOLS) imeHeight.coerceAtLeast(220.dp) else 0.dp,
+        tween(250), label = "panelHeight"
+    )
 
-    // 返回键关闭标签面板
-    BackHandler(enabled = showTagPanel) { showTagPanel = false }
+    // 键盘关闭同步
+    LaunchedEffect(imeHeight) {
+        val wasVisible = prevIme >= 10.dp
+        prevIme = imeHeight
+        if (wasVisible && imeHeight < 10.dp && panelState == PanelState.TYPING)
+            panelState = PanelState.IDLE
+    }
+
+    fun onCategoryTap(cat: ToolbarCategory) {
+        when {
+            panelState == PanelState.TOOLS && activeToolCategory == cat -> {
+                panelState = PanelState.IDLE; activeToolCategory = null
+                editorState.focusEditor()
+            }
+            panelState == PanelState.TOOLS -> { activeToolCategory = cat }
+            else -> {
+                activeToolCategory = cat; panelState = PanelState.TOOLS
+                keyboardController?.hide()
+            }
+        }
+    }
+
+    fun onEditorTap() {
+        when (panelState) {
+            PanelState.TOOLS -> { panelState = PanelState.IDLE; activeToolCategory = null; editorState.focusEditor() }
+            PanelState.IDLE -> editorState.focusEditor()
+            PanelState.TYPING -> {}
+        }
+    }
+
+    BackHandler(enabled = showTagPanel || panelState == PanelState.TOOLS) {
+        if (showTagPanel) showTagPanel = false
+        else { panelState = PanelState.IDLE; activeToolCategory = null }
+    }
+
+    LaunchedEffect(Unit) {
+        if (noteId == null) { panelState = PanelState.TYPING; editorState.focusEditor() }
+    }
 
     Scaffold(
         topBar = {
@@ -260,74 +298,140 @@ fun NoteEditorScreen(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
-            var showSoftwarePicker by remember { mutableStateOf(false) }; var showTimeLinker by remember { mutableStateOf(false) }
-            Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                Box(modifier = Modifier.weight(1f)) {
-                    Surface(shape = RoundedCornerShape(12.dp), color = if (selectedSoftware != null) CategoryColors.forCategory(selectedSoftware.category).background else MaterialTheme.colorScheme.surfaceVariant, onClick = { keyboardController?.hide(); showSoftwarePicker = true }) {
-                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            if (selectedSoftware != null) { val (g1, g2) = CategoryColors.gradientFor(selectedSoftware.category); Box(Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).background(Brush.linearGradient(listOf(g1, g2))), contentAlignment = Alignment.Center) { Text(selectedSoftware.name.take(1), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(8.dp)); Text(selectedSoftware.name, fontWeight = FontWeight.Bold, color = CategoryColors.forCategory(selectedSoftware.category).onBackground) }
-                            else { Text("选择软件", color = MaterialTheme.colorScheme.outline) }
-                            Spacer(Modifier.weight(1f)); Icon(Icons.Default.ArrowDropDown, null, tint = MaterialTheme.colorScheme.outline)
-                        }
-                    }
-                    DropdownMenu(expanded = showSoftwarePicker, onDismissRequest = { showSoftwarePicker = false; panelState = PanelState.IDLE }) { DropdownMenuItem(text = { Text("自由随笔（不关联软件）") }, onClick = { selectedSoftwareId = null; showSoftwarePicker = false; linksInitialized = false; linkedRecordIds = emptySet(); panelState = PanelState.IDLE }); allSoftware.forEach { sw -> DropdownMenuItem(text = { Text("${sw.name} (${sw.platform})") }, onClick = { selectedSoftwareId = sw.id; showSoftwarePicker = false; linksInitialized = false; panelState = PanelState.IDLE }) } }
-                }
-                if (selectedSoftware != null) {
-                    Spacer(Modifier.width(6.dp))
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            // ── 主列：Jetchat Column 模式（imePadding 推起所有内容） ──
+            Column(Modifier.fillMaxSize().imePadding()) {
+                var showSoftwarePicker by remember { mutableStateOf(false) }; var showTimeLinker by remember { mutableStateOf(false) }
+                Row(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
                     Box(modifier = Modifier.weight(1f)) {
-                        val linkedCount = linkedRecordIds.count { id -> allTimeRecords.any { it.id == id } }
-                        Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFFFFF8E1), onClick = { keyboardController?.hide(); showTimeLinker = true }) {
+                        Surface(shape = RoundedCornerShape(12.dp), color = if (selectedSoftware != null) CategoryColors.forCategory(selectedSoftware.category).background else MaterialTheme.colorScheme.surfaceVariant, onClick = { keyboardController?.hide(); showSoftwarePicker = true }) {
                             Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Text("关联时长", color = Color(0xFFE65100), fontWeight = FontWeight.Bold)
-                                if (linkedCount > 0) { Spacer(Modifier.width(4.dp)); Surface(shape = CircleShape, color = Color(0xFFE65100)) { Text("$linkedCount", Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) } }
-                                Spacer(Modifier.weight(1f)); Icon(Icons.Default.ArrowDropDown, null, tint = Color(0xFFE65100))
+                                if (selectedSoftware != null) { val (g1, g2) = CategoryColors.gradientFor(selectedSoftware.category); Box(Modifier.size(24.dp).clip(RoundedCornerShape(6.dp)).background(Brush.linearGradient(listOf(g1, g2))), contentAlignment = Alignment.Center) { Text(selectedSoftware.name.take(1), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(8.dp)); Text(selectedSoftware.name, fontWeight = FontWeight.Bold, color = CategoryColors.forCategory(selectedSoftware.category).onBackground) }
+                                else { Text("选择软件", color = MaterialTheme.colorScheme.outline) }
+                                Spacer(Modifier.weight(1f)); Icon(Icons.Default.ArrowDropDown, null, tint = MaterialTheme.colorScheme.outline)
                             }
                         }
-                        DropdownMenu(expanded = showTimeLinker, onDismissRequest = { showTimeLinker = false; panelState = PanelState.IDLE }, modifier = Modifier.heightIn(max = 280.dp)) {
-                            if (allTimeRecords.isEmpty()) {
-                                DropdownMenuItem(text = { Text("暂无时长记录", color = TxtT) }, onClick = { showTimeLinker = false }, enabled = false)
-                            } else {
-                                allTimeRecords.forEach { record ->
-                                    val isChecked = record.id in linkedRecordIds
-                                    DropdownMenuItem(
-                                        text = {
-                                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                                Checkbox(checked = isChecked, onCheckedChange = { if (it) linkedRecordIds = linkedRecordIds + record.id else linkedRecordIds = linkedRecordIds - record.id }, modifier = Modifier.size(24.dp))
-                                                Spacer(Modifier.width(4.dp))
-                                                Column {
-                                                    Text("${DateTimeUtils.formatTimestamp(record.startTime)} - ${DateTimeUtils.formatTimestamp(record.endTime)}", style = MaterialTheme.typography.bodySmall)
-                                                    Text(DateTimeUtils.formatDuration(record.durationMinutes), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                        DropdownMenu(expanded = showSoftwarePicker, onDismissRequest = { showSoftwarePicker = false; panelState = PanelState.IDLE }) { DropdownMenuItem(text = { Text("自由随笔（不关联软件）") }, onClick = { selectedSoftwareId = null; showSoftwarePicker = false; linksInitialized = false; linkedRecordIds = emptySet(); panelState = PanelState.IDLE }); allSoftware.forEach { sw -> DropdownMenuItem(text = { Text("${sw.name} (${sw.platform})") }, onClick = { selectedSoftwareId = sw.id; showSoftwarePicker = false; linksInitialized = false; panelState = PanelState.IDLE }) } }
+                    }
+                    if (selectedSoftware != null) {
+                        Spacer(Modifier.width(6.dp))
+                        Box(modifier = Modifier.weight(1f)) {
+                            val linkedCount = linkedRecordIds.count { id -> allTimeRecords.any { it.id == id } }
+                            Surface(shape = RoundedCornerShape(12.dp), color = Color(0xFFFFF8E1), onClick = { keyboardController?.hide(); showTimeLinker = true }) {
+                                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                    Text("关联时长", color = Color(0xFFE65100), fontWeight = FontWeight.Bold)
+                                    if (linkedCount > 0) { Spacer(Modifier.width(4.dp)); Surface(shape = CircleShape, color = Color(0xFFE65100)) { Text("$linkedCount", Modifier.padding(horizontal = 6.dp, vertical = 2.dp), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold) } }
+                                    Spacer(Modifier.weight(1f)); Icon(Icons.Default.ArrowDropDown, null, tint = Color(0xFFE65100))
+                                }
+                            }
+                            DropdownMenu(expanded = showTimeLinker, onDismissRequest = { showTimeLinker = false; panelState = PanelState.IDLE }, modifier = Modifier.heightIn(max = 280.dp)) {
+                                if (allTimeRecords.isEmpty()) {
+                                    DropdownMenuItem(text = { Text("暂无时长记录", color = TxtT) }, onClick = { showTimeLinker = false }, enabled = false)
+                                } else {
+                                    allTimeRecords.forEach { record ->
+                                        val isChecked = record.id in linkedRecordIds
+                                        DropdownMenuItem(
+                                            text = {
+                                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                                    Checkbox(checked = isChecked, onCheckedChange = { if (it) linkedRecordIds = linkedRecordIds + record.id else linkedRecordIds = linkedRecordIds - record.id }, modifier = Modifier.size(24.dp))
+                                                    Spacer(Modifier.width(4.dp))
+                                                    Column {
+                                                        Text("${DateTimeUtils.formatTimestamp(record.startTime)} - ${DateTimeUtils.formatTimestamp(record.endTime)}", style = MaterialTheme.typography.bodySmall)
+                                                        Text(DateTimeUtils.formatDuration(record.durationMinutes), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                                                    }
                                                 }
-                                            }
-                                        },
-                                        onClick = { if (record.id in linkedRecordIds) linkedRecordIds = linkedRecordIds - record.id else linkedRecordIds = linkedRecordIds + record.id }
-                                    )
+                                            },
+                                            onClick = { if (record.id in linkedRecordIds) linkedRecordIds = linkedRecordIds - record.id else linkedRecordIds = linkedRecordIds + record.id }
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 16.dp).background(BorderC))
-            Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
-                RichTextEditor(state = editorState, initialContent = initialHtml, onContentChanged = { content = it; editorState.queryFormatState() }, onFormatChanged = { parseFmt(it) }, onTap = { onEditorTap() }, onRequestFocus = { panelState = PanelState.TYPING; activeToolCategory = null; editorState.focusEditor() }, modifier = Modifier.fillMaxSize())
-            }
-            val targetH = when { showTagPanel -> 0.dp; panelState == PanelState.TOOLS -> maxOf(imeHeight, 220.dp); lockHeight -> maxOf(imeHeight, 220.dp); else -> imeHeight }
-            val bottomH by animateDpAsState(targetH, tween(100), label = "bh")
-            val im = panelState == PanelState.TOOLS
-            Surface(Modifier.fillMaxWidth(), color = BarBg) {
-                Column {
+                Box(Modifier.fillMaxWidth().height(1.dp).padding(horizontal = 16.dp).background(BorderC))
+                // 编辑器（weight 1f → 吸收弹性空间）
+                Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp)) {
+                    RichTextEditor(state = editorState, initialContent = initialHtml, onContentChanged = { content = it; editorState.queryFormatState() }, onFormatChanged = { parseFmt(it) }, onTap = { onEditorTap() }, onRequestFocus = { onEditorTap() }, modifier = Modifier.fillMaxSize())
+                }
+                // 格式工具栏（固定高度，被 imePadding 和面板推上去）
+                val im = panelState == PanelState.TOOLS
+                Surface(Modifier.fillMaxWidth(), color = BarBg) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), horizontalArrangement = Arrangement.SpaceEvenly) {
                         Ci(Icons.Default.TextFields, im && activeToolCategory == ToolbarCategory.TEXT) { onCategoryTap(ToolbarCategory.TEXT) }
                         Ci(Icons.AutoMirrored.Filled.FormatListBulleted, im && activeToolCategory == ToolbarCategory.LIST) { onCategoryTap(ToolbarCategory.LIST) }
                         Ci(Icons.Default.AlignHorizontalCenter, im && activeToolCategory == ToolbarCategory.ALIGN) { onCategoryTap(ToolbarCategory.ALIGN) }
                         Ci(Icons.Default.Image, im && activeToolCategory == ToolbarCategory.IMAGE) { onCategoryTap(ToolbarCategory.IMAGE) }
                     }
-                    val show = im && activeToolCategory != null
-                    Box(Modifier.fillMaxWidth().height(bottomH)) { if (show) Pnl(activeToolCategory!!, editorState, fmtB, fmti, fmtU, fmtS, fmtAL, fmtAC, fmtAR, fmtUL, fmtOL, fmtOLT, fmtSize, fmtColor, { galleryLauncher.launch("image/*") }, { launchCamera() }) }
+                }
+                // 格式面板（animateDpAsState 控制高度，高度≈键盘高度→切换时工具栏不动）
+                Box(Modifier.fillMaxWidth().height(panelHeight)) {
+                    if (panelState == PanelState.TOOLS && activeToolCategory != null) {
+                        Surface(Modifier.fillMaxWidth(), color = BarBg) {
+                            Box(Modifier.defaultMinSize(minHeight = 220.dp)) {
+                                Pnl(activeToolCategory!!, editorState, fmtB, fmti, fmtU, fmtS, fmtAL, fmtAC, fmtAR, fmtUL, fmtOL, fmtOLT, fmtSize, fmtColor, { galleryLauncher.launch("image/*") }, { launchCamera() })
+                            }
+                        }
+                    }
                 }
             }
+        }
+    }
+
+    // ── 标签卡片（全屏覆盖，用 imeHeight 直接跟随键盘） ──
+    Box(Modifier.fillMaxSize()) {
+        if (showTagPanel) {
+            Box(
+                modifier = Modifier.fillMaxSize().clickable(
+                    interactionSource = remember { MutableInteractionSource() }, indication = null
+                ) {
+                    if (imeHeight >= 10.dp) keyboardController?.hide()
+                    else showTagPanel = false
+                }
+            )
+        }
+        AnimatedVisibility(
+            visible = showTagPanel,
+            enter = slideInVertically(animationSpec = tween(250)) + fadeIn(tween(150)),
+            exit = slideOutVertically(animationSpec = tween(250)) + fadeOut(tween(150)),
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = 40.dp, end = 40.dp, bottom = imeHeight + 72.dp)
+        ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            com.corunling.noteeverything.ui.components.TagChipPanel(
+                tags = noteTags,
+                onAddTag = { tag -> scope.launch {
+                    if (currentNoteId != null) {
+                        val e = repository.getNoteById(currentNoteId!!)
+                        if (e != null) {
+                            val merged = repository.mergeTags(e.tags, listOf(tag))
+                            repository.updateNote(e.copy(tags = merged.ifEmpty { null }))
+                            noteTags = repository.parseTags(merged)
+                        }
+                    } else {
+                        noteTags = (noteTags + tag).distinct()
+                    }
+                } },
+                onRemoveTag = { tag -> scope.launch {
+                    if (currentNoteId != null) {
+                        val e = repository.getNoteById(currentNoteId!!)
+                        if (e != null) {
+                            val removed = repository.removeTagsFromStr(e.tags, listOf(tag))
+                            repository.updateNote(e.copy(tags = removed.ifEmpty { null }))
+                            noteTags = repository.parseTags(removed)
+                        }
+                    } else {
+                        noteTags = noteTags - tag
+                    }
+                } }
+            )
+        }
         }
     }
 
@@ -364,76 +468,6 @@ fun NoteEditorScreen(
                 TextButton(onClick = { exportTargetFormat = null }) { Text("取消") }
             }
         )
-    }
-
-    // ── 悬浮标签面板 ──
-    val tagCardBottom by animateDpAsState(
-        targetValue = if (panelState == PanelState.TOOLS || activeToolCategory != null) maxOf(imeHeight, 220.dp) + 16.dp
-                      else imeHeight + 72.dp,
-        animationSpec = tween(200),
-        label = "tagCardBottom"
-    )
-    Box(Modifier.fillMaxSize()) {
-        if (showTagPanel) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) {
-                        if (imeHeight >= 10.dp) keyboardController?.hide()
-                        else showTagPanel = false
-                    }
-            )
-        }
-        AnimatedVisibility(
-            visible = showTagPanel,
-            enter = slideInVertically(animationSpec = tween(250)) { it + 200 } + fadeIn(tween(150)),
-            exit = slideOutVertically(animationSpec = tween(250)) { it + 200 } + fadeOut(tween(150)),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(start = 40.dp, end = 40.dp, bottom = tagCardBottom)
-        ) {
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-        ) {
-            com.corunling.noteeverything.ui.components.TagChipPanel(
-                tags = noteTags,
-                onAddTag = { tag ->
-                    scope.launch {
-                        if (currentNoteId != null) {
-                            val e = repository.getNoteById(currentNoteId!!)
-                            if (e != null) {
-                                val merged = repository.mergeTags(e.tags, listOf(tag))
-                                repository.updateNote(e.copy(tags = merged.ifEmpty { null }))
-                                noteTags = repository.parseTags(merged)
-                            }
-                        } else {
-                            noteTags = (noteTags + tag).distinct()
-                        }
-                    }
-                },
-                onRemoveTag = { tag ->
-                    scope.launch {
-                        if (currentNoteId != null) {
-                            val e = repository.getNoteById(currentNoteId!!)
-                            if (e != null) {
-                                val removed = repository.removeTagsFromStr(e.tags, listOf(tag))
-                                repository.updateNote(e.copy(tags = removed.ifEmpty { null }))
-                                noteTags = repository.parseTags(removed)
-                            }
-                        } else {
-                            noteTags = noteTags - tag
-                        }
-                    }
-                }
-            )
-        }
-    }
     }
 }
 
