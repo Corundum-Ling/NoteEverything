@@ -201,9 +201,12 @@ class TimeViewModel(
             val total = filteredStats.sumOf { it.total }
             _totalMinutes.value = total
 
-            val daysWithRecords = if (_selectedPeriod.value == Period.TODAY) 1
-            else repository.getDailyStatsInRange(start, end).size
-            _daysCount.value = daysWithRecords.coerceAtLeast(1)
+            val daysWithRecords = if (_selectedPeriod.value == Period.TODAY) {
+                if (total > 0) 1 else 0
+            } else {
+                repository.getDailyStatsInRange(start, end).size
+            }
+            _daysCount.value = daysWithRecords
             _dailyAvg.value = if (daysWithRecords > 0) total / daysWithRecords else 0
 
             val top = filteredStats.maxByOrNull { it.total }
@@ -267,7 +270,12 @@ class TimeViewModel(
         val cal = Calendar.getInstance()
         val dir = if (backward) -1 else 1
         return when (period) {
-            Period.TODAY -> currStart to currEnd
+            Period.TODAY -> {
+                cal.time = sdf.parse(currStart) ?: return currStart to currEnd
+                cal.add(Calendar.DAY_OF_MONTH, dir)
+                val nd = sdf.format(cal.time)
+                nd to nd
+            }
             Period.WEEK -> {
                 cal.time = sdf.parse(currStart) ?: return currStart to currEnd
                 cal.add(Calendar.DAY_OF_MONTH, 7 * dir)

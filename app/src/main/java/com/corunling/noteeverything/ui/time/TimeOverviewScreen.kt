@@ -104,8 +104,8 @@ fun TimeOverviewScreen(
         // ═══ 时间范围条 + 筛选 ═══
         TimeRangeBar(
             label = rangeLabel,
-            showLeftArrow = showArrows && selectedPeriod != TimeViewModel.Period.TODAY,
-            showRightArrow = showArrows && selectedPeriod != TimeViewModel.Period.TODAY,
+            showLeftArrow = showArrows,
+            showRightArrow = showArrows,
             onPrevious = { viewModel.previousPeriod() },
             onNext = { viewModel.nextPeriod() },
             onLabelClick = {
