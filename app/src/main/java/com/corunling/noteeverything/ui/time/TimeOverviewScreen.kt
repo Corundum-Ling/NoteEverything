@@ -67,6 +67,8 @@ fun TimeOverviewScreen(
     val topSoftwareName by viewModel.topSoftwareName.collectAsState()
     val topSoftwareMinutes by viewModel.topSoftwareMinutes.collectAsState()
     val animatedBarIds by viewModel.animatedBarIds.collectAsState()
+    val lineAnimated by viewModel.lineAnimated.collectAsState()
+    val donutAnimated by viewModel.donutAnimated.collectAsState()
     val softwareList by viewModel.softwareList.collectAsState()
     val filterState by viewModel.filterState.collectAsState()
     val showArrows by viewModel.showArrows.collectAsState()
@@ -167,7 +169,9 @@ fun TimeOverviewScreen(
                                     if (chartReady) {
                                         LineChart(
                                             data = dailyTrends,
-                                            modifier = Modifier.fillMaxWidth().height(200.dp)
+                                            modifier = Modifier.fillMaxWidth().height(200.dp),
+                                            hasAnimated = lineAnimated,
+                                            onAnimated = { viewModel.markLineAnimated() }
                                         )
                                     } else {
                                         Spacer(modifier = Modifier.fillMaxWidth().height(200.dp))
@@ -200,7 +204,9 @@ fun TimeOverviewScreen(
                                     if (chartReady) {
                                         DonutChart(
                                             slices = createCategorySlices(categoryStats.associate { it.category to it.total }),
-                                            modifier = Modifier.fillMaxWidth()
+                                            modifier = Modifier.fillMaxWidth(),
+                                            hasAnimated = donutAnimated,
+                                            onAnimated = { viewModel.markDonutAnimated() }
                                         )
                                     } else {
                                         Spacer(modifier = Modifier.fillMaxWidth().height(140.dp))

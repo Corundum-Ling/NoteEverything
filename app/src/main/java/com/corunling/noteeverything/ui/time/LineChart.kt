@@ -34,18 +34,22 @@ fun LineChart(
     modifier: Modifier = Modifier,
     lineColor: Color = Color(0xFF1A73E8),
     fillColor: Color = Color(0xFF1A73E8).copy(alpha = 0.12f),
-    animDurationMs: Int = 800
+    animDurationMs: Int = 800,
+    hasAnimated: Boolean = false,
+    onAnimated: () -> Unit = {}
 ) {
     if (data.isEmpty()) return
 
     val textMeasurer = rememberTextMeasurer()
 
-    // 用 Animatable：数据变化时重置动画（先 snap 到 0 再 animate 到 1）
-    val animProgress = remember { Animatable(0f) }
+    val animProgress = remember { Animatable(if (hasAnimated) 1f else 0f) }
     LaunchedEffect(data) {
-        delay(80L) // 等页面的 AnimatedContent 淡入完成再播放
-        animProgress.snapTo(0f)
-        animProgress.animateTo(1f, tween(animDurationMs, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        if (!hasAnimated && data.isNotEmpty()) {
+            delay(80L)
+            animProgress.snapTo(0f)
+            animProgress.animateTo(1f, tween(animDurationMs, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+            onAnimated()
+        }
     }
 
     val labelStyle = TextStyle(fontSize = 10.sp, color = Color.Gray, fontWeight = FontWeight.Normal)

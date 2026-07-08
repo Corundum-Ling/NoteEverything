@@ -70,7 +70,20 @@ class TimeViewModel(
     private val _animatedBarIds = MutableStateFlow(setOf<Long>())
     val animatedBarIds: StateFlow<Set<Long>> = _animatedBarIds.asStateFlow()
     fun markBarAnimated(id: Long) { _animatedBarIds.value = _animatedBarIds.value + id }
-    fun resetAnimations() { _animatedBarIds.value = emptySet() }
+
+    // 图表动画（同排行逻辑）
+    private val _lineAnimated = MutableStateFlow(false)
+    val lineAnimated: StateFlow<Boolean> = _lineAnimated.asStateFlow()
+    private val _donutAnimated = MutableStateFlow(false)
+    val donutAnimated: StateFlow<Boolean> = _donutAnimated.asStateFlow()
+    fun markLineAnimated() { _lineAnimated.value = true }
+    fun markDonutAnimated() { _donutAnimated.value = true }
+
+    fun resetAnimations() {
+        _animatedBarIds.value = emptySet()
+        _lineAnimated.value = false
+        _donutAnimated.value = false
+    }
 
     init {
         loadSoftwareList()
@@ -88,6 +101,7 @@ class TimeViewModel(
     fun previousPeriod() {
         val period = _selectedPeriod.value
         if (period == Period.CUSTOM) return
+        resetAnimations()
         val (s, e) = computeDateRange(period, _rangeStart.value, _rangeEnd.value, backward = true)
         setRange(period, s, e)
     }
@@ -95,6 +109,7 @@ class TimeViewModel(
     fun nextPeriod() {
         val period = _selectedPeriod.value
         if (period == Period.CUSTOM) return
+        resetAnimations()
         val (s, e) = computeDateRange(period, _rangeStart.value, _rangeEnd.value, backward = false)
         setRange(period, s, e)
     }

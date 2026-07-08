@@ -56,7 +56,9 @@ data class DonutSlice(
 fun DonutChart(
     slices: List<DonutSlice>,
     modifier: Modifier = Modifier,
-    animDurationMs: Int = 800
+    animDurationMs: Int = 800,
+    hasAnimated: Boolean = false,
+    onAnimated: () -> Unit = {}
 ) {
     if (slices.isEmpty()) return
 
@@ -64,11 +66,14 @@ fun DonutChart(
     val density = LocalDensity.current
     val primaryColor = MaterialTheme.colorScheme.primary
 
-    val animProgress = remember { Animatable(0f) }
+    val animProgress = remember { Animatable(if (hasAnimated) 1f else 0f) }
     LaunchedEffect(slices) {
-        delay(300L)
-        animProgress.snapTo(0f)
-        animProgress.animateTo(1f, tween(animDurationMs, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+        if (!hasAnimated && slices.isNotEmpty()) {
+            delay(300L)
+            animProgress.snapTo(0f)
+            animProgress.animateTo(1f, tween(animDurationMs, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+            onAnimated()
+        }
     }
 
     Row(
