@@ -46,7 +46,7 @@ fun LineChart(
     val animProgress = remember { Animatable(if (hasAnimated) 1f else 0f) }
     LaunchedEffect(data, animVersion) {
         if (!hasAnimated && data.isNotEmpty()) {
-            delay(80L)
+            delay(30L)
             animProgress.snapTo(0f)
             animProgress.animateTo(1f, tween(animDurationMs, easing = androidx.compose.animation.core.FastOutSlowInEasing))
             onAnimated()

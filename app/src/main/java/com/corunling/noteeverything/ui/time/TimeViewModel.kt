@@ -75,18 +75,27 @@ class TimeViewModel(
     private val _dataVersion = MutableStateFlow(0)
     val dataVersion: StateFlow<Int> = _dataVersion.asStateFlow()
 
-    // 图表动画（同排行逻辑）
-    private val _lineAnimated = MutableStateFlow(false)
-    val lineAnimated: StateFlow<Boolean> = _lineAnimated.asStateFlow()
-    private val _donutAnimated = MutableStateFlow(false)
-    val donutAnimated: StateFlow<Boolean> = _donutAnimated.asStateFlow()
-    fun markLineAnimated() { _lineAnimated.value = true }
-    fun markDonutAnimated() { _donutAnimated.value = true }
+    // 图表动画 + generation（防止 AnimatedContent 过渡期旧内容污染状态）
+    private val _lineState = MutableStateFlow(Pair(0, false)) // (generation, animated)
+    val lineState: StateFlow<Pair<Int, Boolean>> = _lineState.asStateFlow()
+    private val _donutState = MutableStateFlow(Pair(0, false))
+    val donutState: StateFlow<Pair<Int, Boolean>> = _donutState.asStateFlow()
+    private var animGen = 0
+
+    fun markLineAnimated(gen: Int) {
+        val cur = _lineState.value
+        if (cur.first == gen && !cur.second) _lineState.value = Pair(gen, true)
+    }
+    fun markDonutAnimated(gen: Int) {
+        val cur = _donutState.value
+        if (cur.first == gen && !cur.second) _donutState.value = Pair(gen, true)
+    }
 
     fun resetAnimations() {
+        animGen++
         _animatedBarIds.value = emptySet()
-        _lineAnimated.value = false
-        _donutAnimated.value = false
+        _lineState.value = Pair(animGen, false)
+        _donutState.value = Pair(animGen, false)
     }
 
     init {

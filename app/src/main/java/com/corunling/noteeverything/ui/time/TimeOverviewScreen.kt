@@ -67,8 +67,8 @@ fun TimeOverviewScreen(
     val topSoftwareName by viewModel.topSoftwareName.collectAsState()
     val topSoftwareMinutes by viewModel.topSoftwareMinutes.collectAsState()
     val animatedBarIds by viewModel.animatedBarIds.collectAsState()
-    val lineAnimated by viewModel.lineAnimated.collectAsState()
-    val donutAnimated by viewModel.donutAnimated.collectAsState()
+    val lineAnimState by viewModel.lineState.collectAsState()
+    val donutAnimState by viewModel.donutState.collectAsState()
     val dataVersion by viewModel.dataVersion.collectAsState()
     val softwareList by viewModel.softwareList.collectAsState()
     val filterState by viewModel.filterState.collectAsState()
@@ -127,7 +127,7 @@ fun TimeOverviewScreen(
         val tabKey = "${selectedPeriod.ordinal}-$rangeStart-$rangeEnd"
         AnimatedContent(
             targetState = tabKey,
-            transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(80)) },
+            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(100)) },
             label = "tabContent",
             modifier = Modifier.weight(1f)
         ) { _ ->
@@ -171,9 +171,9 @@ fun TimeOverviewScreen(
                                         LineChart(
                                             data = dailyTrends,
                                             modifier = Modifier.fillMaxWidth().height(200.dp),
-                                            hasAnimated = lineAnimated,
+                                            hasAnimated = lineAnimState.second,
                                             animVersion = dataVersion,
-                                            onAnimated = { viewModel.markLineAnimated() }
+                                            onAnimated = { viewModel.markLineAnimated(lineAnimState.first) }
                                         )
                                     } else {
                                         Spacer(modifier = Modifier.fillMaxWidth().height(200.dp))
@@ -207,9 +207,9 @@ fun TimeOverviewScreen(
                                         DonutChart(
                                             slices = createCategorySlices(categoryStats.associate { it.category to it.total }),
                                             modifier = Modifier.fillMaxWidth(),
-                                            hasAnimated = donutAnimated,
+                                            hasAnimated = donutAnimState.second,
                                             animVersion = dataVersion,
-                                            onAnimated = { viewModel.markDonutAnimated() }
+                                            onAnimated = { viewModel.markDonutAnimated(donutAnimState.first) }
                                         )
                                     } else {
                                         Spacer(modifier = Modifier.fillMaxWidth().height(140.dp))
