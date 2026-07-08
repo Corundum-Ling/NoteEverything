@@ -25,6 +25,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.Flow
@@ -38,7 +40,10 @@ data class AppSettings(
     val darkMode: Boolean = false,
     val showLineChart: Boolean = true,
     val showDonutChart: Boolean = true,
-    val showRanking: Boolean = true
+    val showRanking: Boolean = true,
+    val autoTrackEnabled: Boolean = false,
+    val lastAutoSyncDate: String = "",   // "YYYY-MM-DD" 或空表示从未同步
+    val mergeThresholdMinutes: Int = 90  // 自动同步时长合并阈值（分钟），默认90
 )
 
 class SettingsManager(private val context: Context) {
@@ -48,6 +53,9 @@ class SettingsManager(private val context: Context) {
         private val SHOW_LINE_CHART_KEY = booleanPreferencesKey("show_line_chart")
         private val SHOW_DONUT_CHART_KEY = booleanPreferencesKey("show_donut_chart")
         private val SHOW_RANKING_KEY = booleanPreferencesKey("show_ranking")
+        private val AUTO_TRACK_ENABLED_KEY = booleanPreferencesKey("auto_track_enabled")
+        private val LAST_AUTO_SYNC_DATE_KEY = stringPreferencesKey("last_auto_sync_date")
+        private val MERGE_THRESHOLD_KEY = intPreferencesKey("merge_threshold_minutes")
     }
 
     /** 设置流：收集此 Flow 以响应式监听设置变化 */
@@ -56,7 +64,10 @@ class SettingsManager(private val context: Context) {
             darkMode = prefs[DARK_MODE_KEY] ?: false,
             showLineChart = prefs[SHOW_LINE_CHART_KEY] ?: true,
             showDonutChart = prefs[SHOW_DONUT_CHART_KEY] ?: true,
-            showRanking = prefs[SHOW_RANKING_KEY] ?: true
+            showRanking = prefs[SHOW_RANKING_KEY] ?: true,
+            autoTrackEnabled = prefs[AUTO_TRACK_ENABLED_KEY] ?: false,
+            lastAutoSyncDate = prefs[LAST_AUTO_SYNC_DATE_KEY] ?: "",
+            mergeThresholdMinutes = prefs[MERGE_THRESHOLD_KEY] ?: 90
         )
     }
 
@@ -85,6 +96,31 @@ class SettingsManager(private val context: Context) {
     suspend fun setShowRanking(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[SHOW_RANKING_KEY] = enabled
+        }
+    }
+
+    // ══════════════════════════════════════════════════
+    // 自动同步设置
+    // ══════════════════════════════════════════════════
+
+    /** 开启/关闭自动同步 */
+    suspend fun setAutoTrackEnabled(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[AUTO_TRACK_ENABLED_KEY] = enabled
+        }
+    }
+
+    /** 更新最近一次自动同步的日期 */
+    suspend fun setLastAutoSyncDate(date: String) {
+        context.dataStore.edit { prefs ->
+            prefs[LAST_AUTO_SYNC_DATE_KEY] = date
+        }
+    }
+
+    /** 设置自动时长合并阈值（分钟） */
+    suspend fun setMergeThreshold(minutes: Int) {
+        context.dataStore.edit { prefs ->
+            prefs[MERGE_THRESHOLD_KEY] = minutes.coerceIn(30, 480)
         }
     }
 }

@@ -45,6 +45,14 @@ interface SoftwareDao {
     @Query("SELECT * FROM software WHERE name LIKE '%' || :query || '%'")
     fun search(query: String): Flow<List<SoftwareEntity>>
 
+    // 按包名查询（用于 UsageStats 自动匹配）
+    @Query("SELECT * FROM software WHERE packageName = :packageName LIMIT 1")
+    suspend fun getByPackageName(packageName: String): SoftwareEntity?
+
+    // 获取所有已使用的包名（用于添加软件时去重）
+    @Query("SELECT packageName FROM software WHERE packageName IS NOT NULL")
+    suspend fun getAllPackageNames(): List<String>
+
     // 一次性查询全部（非 Flow），用于导出时获取软件名映射
     @Query("SELECT * FROM software ORDER BY category, name")
     suspend fun getAllSync(): List<SoftwareEntity>

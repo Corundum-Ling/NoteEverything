@@ -20,6 +20,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.corunling.noteeverything.data.dao.NoteDao
 import com.corunling.noteeverything.data.dao.NoteTimeRecordLinkDao
 import com.corunling.noteeverything.data.dao.SoftwareDao
@@ -36,7 +38,7 @@ import com.corunling.noteeverything.data.entity.TimeRecordEntity
         TimeRecordEntity::class,
         NoteTimeRecordLink::class
     ],
-    version = 4,
+    version = 6,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -46,13 +48,24 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun noteTimeRecordLinkDao(): NoteTimeRecordLinkDao
 
     companion object {
+        // v4 → v5: 为 software 表添加 packageName 列（可空，不影响已有数据）
+        val MIGRATION_4_5 = Migration(4, 5) { db ->
+            db.execSQL("ALTER TABLE software ADD COLUMN packageName TEXT DEFAULT NULL")
+        }
+
+        // v5 → v6: 为 software 表添加 trackMode 列，默认 manual
+        val MIGRATION_5_6 = Migration(5, 6) { db ->
+            db.execSQL("ALTER TABLE software ADD COLUMN trackMode TEXT DEFAULT 'manual' NOT NULL")
+        }
+
         fun build(context: Context): AppDatabase {
             return Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "noteeverything.db"
             )
-                // MVP 阶段：改表结构时直接重建数据库（数据会丢失）
+                .addMigrations(MIGRATION_4_5, MIGRATION_5_6)
+                // 未知版本变更时回退到重建（开发阶段安全网）
                 .fallbackToDestructiveMigration()
                 .build()
         }

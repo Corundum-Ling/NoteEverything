@@ -139,6 +139,10 @@ interface TimeRecordDao {
     """)
     suspend fun getCategoryStatsInRange(startDate: String, endDate: String): List<CategoryDuration>
 
+    // 按软件+日期+来源查询自动记录（用于自动同步的去重/更新判断）
+    @Query("SELECT * FROM time_records WHERE softwareId = :softwareId AND date = :date AND source = 'auto' LIMIT 1")
+    suspend fun getAutoRecord(softwareId: Long, date: String): TimeRecordEntity?
+
     // 清空所有时长记录
     @Query("DELETE FROM time_records")
     suspend fun deleteAll()

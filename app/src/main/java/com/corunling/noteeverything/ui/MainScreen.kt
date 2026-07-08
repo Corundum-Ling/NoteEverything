@@ -13,6 +13,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -24,14 +26,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.corunling.noteeverything.App
 import com.corunling.noteeverything.data.NoteEverythingRepository
+import com.corunling.noteeverything.data.auto.InstalledApp
+import com.corunling.noteeverything.data.auto.InstalledAppFetcher
+import com.corunling.noteeverything.util.DateTimeUtils
 import com.corunling.noteeverything.ui.components.SelectionFloatingCard
 import com.corunling.noteeverything.ui.navigation.Routes
 import com.corunling.noteeverything.ui.note.NoteListScreen
 import com.corunling.noteeverything.ui.software.SoftwareListScreen
 import com.corunling.noteeverything.ui.time.TimeOverviewScreen
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 enum class MainTab(val label: String) {
@@ -64,6 +75,17 @@ fun MainScreen(
 
     var pendingAction by remember { mutableStateOf<String?>(null) }
     fun consumeAction() { pendingAction = null }
+
+    // ═══ App 启动时自动同步 ═══
+    val mainContext = LocalContext.current
+    val mainApp = mainContext.applicationContext as App
+    LaunchedEffect(Unit) {
+        val settings = mainApp.settingsManager.settingsFlow.first()
+        if (settings.autoTrackEnabled) {
+            mainApp.autoTracker.syncRecent(mainApp.repository, settings.lastAutoSyncDate)
+            mainApp.settingsManager.setLastAutoSyncDate(DateTimeUtils.today())
+        }
+    }
 
     BackHandler(enabled = selectionMode) {
         clearSelectionAction()
@@ -319,24 +341,191 @@ fun AddSoftwareDialog(
     repository: NoteEverythingRepository,
     onDismiss: () -> Unit
 ) {
+    val context = LocalContext.current
+    val app = context.applicationContext as App
+    val scope = rememberCoroutineScope()
+    val installedAppFetcher = remember { app.let { InstalledAppFetcher(it) } }
+
     var name by remember { mutableStateOf("") }
     var platform by remember { mutableStateOf("PC") }
     var category by remember { mutableStateOf("游戏") }
-    val scope = rememberCoroutineScope()
+    var trackMode by remember { mutableStateOf("manual") }
+    var selectedPackageName by remember { mutableStateOf<String?>(null) }
+
+    // 搜索联想状态（空列表 = 无结果，非 null 避免崩溃）
+    var suggestions by remember { mutableStateOf<List<InstalledApp>>(emptyList()) }
+    var isSearching by remember { mutableStateOf(false) }
+    var noMatch by remember { mutableStateOf(false) }
+    var excludePackages by remember { mutableStateOf<Set<String>>(emptySet()) }
+
+    // 加载已添加的包名（去重用）
+    LaunchedEffect(Unit) {
+        excludePackages = repository.getAllPackageNames().filterNotNull().toSet()
+        installedAppFetcher.invalidateCache()
+    }
+
+    // 搜索联想的防抖
+    LaunchedEffect(name, trackMode, platform) {
+        if (platform == "Android" && trackMode == "auto" && name.length >= 2) {
+            isSearching = true
+            noMatch = false
+            delay(200) // 200ms 防抖
+            val results = installedAppFetcher.searchApps(name, excludePackages)
+            suggestions = results
+            noMatch = results.isEmpty()
+            isSearching = false
+            // 有结果时自动选中第一位
+            if (results.isNotEmpty() && selectedPackageName == null) {
+                selectedPackageName = results.first().packageName
+            }
+        } else {
+            suggestions = emptyList()
+            noMatch = false
+            if (platform != "Android" || trackMode != "auto") {
+                selectedPackageName = null
+            }
+        }
+    }
+
+    val isAutoAndroid = platform == "Android" && trackMode == "auto"
+    val isAuto = trackMode != "manual"
+    // Android auto 必须选联想结果才能添加；PC auto 只需有名字
+    val canAdd = name.isNotBlank() && (!isAutoAndroid || (!noMatch && selectedPackageName != null))
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("添加软件") },
         text = {
             Column {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("名称") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                // ── 名称行 + Auto/Manual 下拉 ──
+                if (platform == "Android" || platform == "PC") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        OutlinedTextField(
+                            value = name,
+                            onValueChange = {
+                                name = it
+                                selectedPackageName = null
+                            },
+                            label = { Text("名称") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        var modeExpanded by remember { mutableStateOf(false) }
+                        ExposedDropdownMenuBox(
+                            expanded = modeExpanded,
+                            onExpandedChange = { modeExpanded = it }
+                        ) {
+                            OutlinedTextField(
+                                value = if (trackMode != "manual") "自动" else "手动",
+                                onValueChange = {},
+                                readOnly = true,
+                                label = { Text("模式") },
+                                modifier = Modifier.width(100.dp).menuAnchor(),
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = modeExpanded)
+                                },
+                                singleLine = true
+                            )
+                            ExposedDropdownMenu(
+                                expanded = modeExpanded,
+                                onDismissRequest = { modeExpanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("手动") },
+                                    onClick = {
+                                        trackMode = "manual"
+                                        modeExpanded = false
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("自动") },
+                                    onClick = {
+                                        trackMode = if (platform == "Android") "auto" else "pc_sync"
+                                        modeExpanded = false
+                                        selectedPackageName = null
+                                    }
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text("名称") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                // ── 搜索联想下拉 ──
+                if (isAutoAndroid) {
+                    Spacer(Modifier.height(2.dp))
+                    if (suggestions.isNotEmpty()) {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        ) {
+                            LazyColumn(modifier = Modifier.heightIn(max = 160.dp)) {
+                                items(suggestions) { appInfo ->
+                                    val isSelected = appInfo.packageName == selectedPackageName
+                                    Surface(
+                                        color = if (isSelected)
+                                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                                        else Color.Transparent,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    name = appInfo.appName
+                                                    selectedPackageName = appInfo.packageName
+                                                }
+                                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                appInfo.appName,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            Text(
+                                                appInfo.packageName,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.outline,
+                                                fontSize = 10.sp
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    if (noMatch && name.length >= 2) {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+                        ) {
+                            Text(
+                                "未匹配到应用，请更换关键词",
+                                modifier = Modifier.padding(12.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(8.dp))
+
+                // ── 平台 ──
                 var platformExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
                     expanded = platformExpanded,
@@ -357,12 +546,19 @@ fun AddSoftwareDialog(
                         listOf("PC", "Android", "iOS", "Switch", "Other").forEach { p ->
                             DropdownMenuItem(
                                 text = { Text(p) },
-                                onClick = { platform = p; platformExpanded = false }
+                                onClick = {
+                                    platform = p
+                                    platformExpanded = false
+                                    if (p != "Android") trackMode = "manual"
+                                }
                             )
                         }
                     }
                 }
+
                 Spacer(modifier = Modifier.height(8.dp))
+
+                // ── 分类 ──
                 var categoryExpanded by remember { mutableStateOf(false) }
                 ExposedDropdownMenuBox(
                     expanded = categoryExpanded,
@@ -394,10 +590,35 @@ fun AddSoftwareDialog(
             TextButton(
                 onClick = {
                     if (name.isNotBlank()) {
-                        scope.launch { repository.createSoftware(name, platform, category) }
-                        onDismiss()
+                        scope.launch {
+                            // Android auto：自动取包名；PC auto：用户随便填名字
+                            val finalPkg = if (isAutoAndroid) {
+                                selectedPackageName ?: suggestions.firstOrNull()?.packageName
+                            } else null
+                            val finalName = if (isAutoAndroid && finalPkg != null && selectedPackageName == null) {
+                                suggestions.firstOrNull()?.appName ?: name
+                            } else name
+                            val finalTrackMode = when {
+                                isAutoAndroid -> "auto"
+                                platform == "PC" && trackMode == "pc_sync" -> "pc_sync"
+                                else -> "manual"
+                            }
+                            val newId = repository.createSoftware(
+                                name = finalName,
+                                platform = platform,
+                                category = category,
+                                packageName = finalPkg,
+                                trackMode = finalTrackMode
+                            )
+                            // Android auto 创建后立即同步最近 7 天
+                            if (isAutoAndroid && finalPkg != null) {
+                                app.autoTracker.syncRange(repository, DateTimeUtils.today(), 7)
+                            }
+                            onDismiss()
+                        }
                     }
-                }
+                },
+                enabled = canAdd
             ) { Text("添加") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } }

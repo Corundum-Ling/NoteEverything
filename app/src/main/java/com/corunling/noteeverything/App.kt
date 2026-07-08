@@ -13,6 +13,7 @@ package com.corunling.noteeverything
 import android.app.Application
 import com.corunling.noteeverything.data.AppDatabase
 import com.corunling.noteeverything.data.NoteEverythingRepository
+import com.corunling.noteeverything.data.auto.AutoTracker
 import com.corunling.noteeverything.util.SettingsManager
 
 class App : Application() {
@@ -35,5 +36,10 @@ class App : Application() {
     /** 设置管理器（DataStore 持久化） */
     val settingsManager: SettingsManager by lazy {
         SettingsManager(this)
+    }
+
+    /** 自动时长追踪器（UsageStatsManager 封装） */
+    val autoTracker: AutoTracker by lazy {
+        AutoTracker(this)
     }
 }

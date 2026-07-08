@@ -79,6 +79,11 @@ fun NoteEditorScreen(
     var noteTags by remember { mutableStateOf<List<String>>(emptyList()) }
     var isLocked by remember { mutableStateOf(false) }
 
+    // 时长关联状态（提前声明，供 doAutoSave 使用）
+    var allTimeRecords by remember { mutableStateOf<List<TimeRecordEntity>>(emptyList()) }
+    var linkedRecordIds by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var linksInitialized by remember { mutableStateOf(false) }
+
     // 导出状态
     var exportTargetFormat by remember { mutableStateOf<String?>(null) } // "html" / "doc" / null
     var exportContent by remember { mutableStateOf("") } // 编辑器实时内容快照
@@ -102,8 +107,12 @@ fun NoteEditorScreen(
                 if (currentNoteId != null) {
                     val e = repository.getNoteById(currentNoteId!!)
                     if (e != null) repository.updateNote(e.copy(softwareId = selectedSoftwareId, content = toSave, timestamp = timestamp, type = if (selectedSoftwareId != null) "software" else "free", tags = tagsStr))
+                    repository.setNoteLinks(currentNoteId!!, linkedRecordIds.toList())
                 } else {
                     currentNoteId = repository.createNote(softwareId = selectedSoftwareId, content = toSave, timestamp = timestamp, tags = tagsStr)
+                    if (linkedRecordIds.isNotEmpty()) {
+                        repository.setNoteLinks(currentNoteId!!, linkedRecordIds.toList())
+                    }
                 }
                 initialHtml = toSave
             } catch (_: Exception) {}
@@ -155,7 +164,6 @@ fun NoteEditorScreen(
         }
     }
 
-    var allTimeRecords by remember { mutableStateOf<List<TimeRecordEntity>>(emptyList()) }; var linkedRecordIds by remember { mutableStateOf<Set<Long>>(emptySet()) }; var linksInitialized by remember { mutableStateOf(false) }
     LaunchedEffect(selectedSoftwareId) { if (selectedSoftwareId != null) repository.getTimeRecordsBySoftware(selectedSoftwareId!!).collect { allTimeRecords = it.sortedByDescending { r -> r.startTime } } else allTimeRecords = emptyList() }
     LaunchedEffect(noteId, allTimeRecords, linksInitialized) { if (!linksInitialized) { if (noteId != null) repository.getLinksForNote(noteId).collect { linkedRecordIds = it.map { l -> l.timeRecordId }.toSet() } else if (selectedSoftwareId != null) linkedRecordIds = allTimeRecords.map { it.id }.toSet(); linksInitialized = true } }
 
@@ -344,7 +352,10 @@ fun NoteEditorScreen(
                                                     Spacer(Modifier.width(4.dp))
                                                     Column {
                                                         Text("${DateTimeUtils.formatTimestamp(record.startTime)} - ${DateTimeUtils.formatTimestamp(record.endTime)}", style = MaterialTheme.typography.bodySmall)
-                                                        Text(DateTimeUtils.formatDuration(record.durationMinutes), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                                                        Row {
+                                                            Text(DateTimeUtils.formatDuration(record.durationMinutes), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.secondary)
+                                                            Text(" · ${record.date}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+                                                        }
                                                     }
                                                 }
                                             },

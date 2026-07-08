@@ -46,15 +46,35 @@ class NoteEverythingRepository(
 
     suspend fun getSoftware(id: Long): SoftwareEntity? = softwareDao.getById(id)
 
-    suspend fun createSoftware(name: String, platform: String, category: String): Long {
+    suspend fun createSoftware(name: String, platform: String, category: String, packageName: String? = null, trackMode: String = "manual"): Long {
         return softwareDao.insert(
-            SoftwareEntity(name = name, platform = platform, category = category)
+            SoftwareEntity(name = name, platform = platform, category = category, packageName = packageName, trackMode = trackMode)
         )
     }
 
     suspend fun updateSoftware(software: SoftwareEntity) = softwareDao.update(software)
 
     suspend fun deleteSoftware(software: SoftwareEntity) = softwareDao.delete(software)
+
+    /** 按包名查找软件（用于 UsageStats 自动匹配） */
+    suspend fun getSoftwareByPackageName(packageName: String): SoftwareEntity? =
+        softwareDao.getByPackageName(packageName)
+
+    /** 获取所有已使用的包名（添加软件时去重用） */
+    suspend fun getAllPackageNames(): List<String> = softwareDao.getAllPackageNames()
+
+    /** 设置软件的 Android 包名 — 同时自动将 trackMode 切为 "auto" */
+    suspend fun setSoftwarePackageName(softwareId: Long, packageName: String?) {
+        val sw = softwareDao.getById(softwareId) ?: return
+        val newMode = if (packageName != null) "auto" else sw.trackMode
+        softwareDao.update(sw.copy(packageName = packageName, trackMode = newMode))
+    }
+
+    /** 切换软件的 trackMode */
+    suspend fun setSoftwareTrackMode(softwareId: Long, mode: String) {
+        val sw = softwareDao.getById(softwareId) ?: return
+        softwareDao.update(sw.copy(trackMode = mode))
+    }
 
     /**
      * 置顶/取消置顶软件
@@ -165,6 +185,14 @@ class NoteEverythingRepository(
 
     suspend fun deleteTimeRecord(timeRecord: TimeRecordEntity) =
         timeRecordDao.delete(timeRecord)
+
+    /** 更新一条时长记录 */
+    suspend fun updateTimeRecord(timeRecord: TimeRecordEntity) =
+        timeRecordDao.update(timeRecord)
+
+    /** 查询某软件某天的自动时长记录（用于去重/更新） */
+    suspend fun getAutoRecordForSoftwareAndDate(softwareId: Long, date: String): TimeRecordEntity? =
+        timeRecordDao.getAutoRecord(softwareId, date)
 
     suspend fun getDailyStats(date: String): List<SoftwareDuration> =
         timeRecordDao.getDailyStats(date)

@@ -30,6 +30,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.navigation.NavHostController
+import com.corunling.noteeverything.App
 import com.corunling.noteeverything.data.NoteEverythingRepository
 import com.corunling.noteeverything.data.entity.NoteEntity
 import com.corunling.noteeverything.data.entity.SoftwareEntity
@@ -108,6 +110,10 @@ fun SoftwareDetailScreen(
     val catColor = sw?.let { CategoryColors.forCategory(it.category) }
     val (gradStart, gradEnd) = sw?.let { CategoryColors.gradientFor(it.category) }
         ?: (Color.Gray to Color.DarkGray)
+    val isAuto = sw?.trackMode == "auto" || sw?.trackMode == "pc_sync"
+    val app = LocalContext.current.applicationContext as App
+    val settings by app.settingsManager.settingsFlow.collectAsState(initial = com.corunling.noteeverything.util.AppSettings())
+    val mergeThreshold = settings.mergeThresholdMinutes
 
     Scaffold(
         topBar = {
@@ -194,8 +200,97 @@ fun SoftwareDetailScreen(
                 }
             }
 
-            // ═══ 2. 计时器 ═══
-            item {
+            // ═══ 2. 包名设置（自动同步用） ═══
+            sw?.let { swNotNull ->
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                        )
+                    ) {
+                        var showPkgEdit by remember { mutableStateOf(false) }
+                        var pkgName by remember { mutableStateOf(swNotNull.packageName ?: "") }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "Android 包名",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    swNotNull.packageName?.let { it } ?: "未设置（自动同步需要包名匹配）",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = if (swNotNull.packageName != null)
+                                        MaterialTheme.colorScheme.onSurface
+                                    else
+                                        MaterialTheme.colorScheme.outline
+                                )
+                            }
+                            TextButton(onClick = {
+                                pkgName = swNotNull.packageName ?: ""
+                                showPkgEdit = true
+                            }) {
+                                Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("编辑")
+                            }
+                        }
+
+                        if (showPkgEdit) {
+                            AlertDialog(
+                                onDismissRequest = { showPkgEdit = false },
+                                title = { Text("编辑 Android 包名") },
+                                text = {
+                                    Column {
+                                        Text(
+                                            "包名用于自动匹配系统使用统计。\n" +
+                                            "例如：com.example.game",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Spacer(Modifier.height(12.dp))
+                                        OutlinedTextField(
+                                            value = pkgName,
+                                            onValueChange = { pkgName = it },
+                                            label = { Text("包名") },
+                                            singleLine = true,
+                                            placeholder = { Text("com.example.app") },
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        scope.launch {
+                                            repository.setSoftwarePackageName(
+                                                softwareId,
+                                                pkgName.trim().ifEmpty { null }
+                                            )
+                                            software = repository.getSoftware(softwareId)
+                                        }
+                                        showPkgEdit = false
+                                    }) { Text("保存") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showPkgEdit = false }) { Text("取消") }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ═══ 3. 计时器（Auto 模式隐藏） ═══
+            if (!isAuto) item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
@@ -345,11 +440,38 @@ fun SoftwareDetailScreen(
             if (timeRecords.isEmpty()) {
                 item {
                     Text(
-                        "还没有时长记录",
+                        if (isAuto) "暂无自动同步数据" else "还没有时长记录",
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+            } else if (isAuto) {
+                // 自动模式：合并展示
+                val autoRecords = timeRecords.filter { it.source == "auto" }
+                if (autoRecords.isEmpty()) {
+                    item {
+                        Text(
+                            "暂无自动同步数据",
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    val mergedBlocks = mergeTimeRecords(autoRecords, mergeThreshold)
+                    val showBlocks = if (timeExpanded) mergedBlocks else mergedBlocks.take(3)
+                    items(showBlocks, key = { "merged_${it.startTime}_${it.endTime}" }) { block ->
+                        MergedTimeBlockCard(block = block)
+                    }
+                    if (mergedBlocks.size > 3) {
+                        item {
+                            TextButton(onClick = { timeExpanded = !timeExpanded }) {
+                                Text(
+                                    if (timeExpanded) "收起" else "展开全部 (${mergedBlocks.size} 时段)"
+                                )
+                            }
+                        }
+                    }
+                }
             } else {
+                // 手动模式：逐条展示
                 val showTime = if (timeExpanded) timeRecords else timeRecords.take(3)
                 items(showTime, key = { "time_${it.id}" }) { record ->
                     TimeRecordCard(
@@ -568,8 +690,9 @@ private fun NoteCard(
                     }
                 }
                 if (linkedRecords.isNotEmpty()) {
+                    val dates = linkedRecords.map { it.date }.distinct().joinToString(", ")
                     Text(
-                        "🔗 ${linkedRecords.map { DateTimeUtils.formatDuration(it.durationMinutes) }.joinToString(" + ")}",
+                        "🔗 ${linkedRecords.map { DateTimeUtils.formatDuration(it.durationMinutes) }.joinToString(" + ")}  ($dates)",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
@@ -636,7 +759,11 @@ private fun TimeRecordCard(
                     color = MaterialTheme.colorScheme.outline
                 )
                 Text(
-                    if (record.source == "timer") "计时器" else "手动录入",
+                    when (record.source) {
+                        "timer" -> "计时器"
+                        "auto" -> "自动同步"
+                        else -> "手动录入"
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )
@@ -744,4 +871,99 @@ private fun NoteImageThumbnail(
 private fun extractFirstImageSrc(html: String): String? {
     val regex = """src=["'](data:image/[^"']+)["']""".toRegex()
     return regex.find(html)?.groupValues?.getOrNull(1)
+}
+
+// ═══════════════════════════════════════════════════
+// 自动时长合并展示
+// ═══════════════════════════════════════════════════
+
+/**
+ * 合并后的时长块。
+ * 同一个软件同一天的 auto 记录，间隔不超过阈值的合并为一个块。
+ */
+data class MergedTimeBlock(
+    val startTime: Long,
+    val endTime: Long,
+    val totalMinutes: Long,
+    val recordCount: Int
+)
+
+/**
+ * 将 auto 时长记录按天分组，每天内按阈值合并为时段列表。
+ * 合并只发生在同一天内，绝不跨天。
+ * 算法：按 date 分组 → 每组按 startTime 排序 → 合并间隔在阈值内的记录。
+ */
+private fun mergeTimeRecords(
+    records: List<TimeRecordEntity>,
+    thresholdMinutes: Int
+): List<MergedTimeBlock> {
+    if (records.isEmpty()) return emptyList()
+    val thresholdMs = thresholdMinutes * 60 * 1000L
+    val result = mutableListOf<MergedTimeBlock>()
+
+    // 先按天分组，再在每天内合并
+    records.groupBy { it.date }.forEach { (_, dayRecords) ->
+        val sorted = dayRecords.sortedBy { it.startTime }
+        var blockStart = sorted[0].startTime
+        var blockEnd = sorted[0].endTime
+        var totalMin = sorted[0].durationMinutes
+        var count = 1
+
+        for (i in 1 until sorted.size) {
+            val curr = sorted[i]
+            if (curr.startTime - blockEnd <= thresholdMs) {
+                blockEnd = maxOf(blockEnd, curr.endTime)
+                totalMin += curr.durationMinutes
+                count++
+            } else {
+                result.add(MergedTimeBlock(blockStart, blockEnd, totalMin, count))
+                blockStart = curr.startTime
+                blockEnd = curr.endTime
+                totalMin = curr.durationMinutes
+                count = 1
+            }
+        }
+        result.add(MergedTimeBlock(blockStart, blockEnd, totalMin, count))
+    }
+
+    return result
+}
+
+/**
+ * 合并时长块展示卡片（Auto 模式专用）。
+ * 显示时间段、合并后的总时长、包含的记录数。
+ * 无删除按钮（auto 记录只读）。背景色同普通记录卡片保持一致。
+ */
+@Composable
+private fun MergedTimeBlockCard(
+    block: MergedTimeBlock
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text(
+                    "${DateTimeUtils.formatTimestamp(block.startTime)} - ${DateTimeUtils.formatTimestamp(block.endTime)}",
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Text(
+                    "共 ${block.recordCount} 条记录 · ${DateTimeUtils.millisToDateStr(block.startTime)}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+            Text(
+                DateTimeUtils.formatDuration(block.totalMinutes),
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
 }
