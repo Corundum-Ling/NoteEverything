@@ -12,9 +12,11 @@
 
 package com.corunling.noteeverything.ui.time
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
@@ -62,11 +64,12 @@ fun DonutChart(
     val density = LocalDensity.current
     val primaryColor = MaterialTheme.colorScheme.primary
 
-    val animProgress by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = tween(animDurationMs, easing = androidx.compose.animation.core.FastOutSlowInEasing),
-        label = "donutAnim"
-    )
+    val animProgress = remember { Animatable(0f) }
+    LaunchedEffect(slices) {
+        delay(300L)
+        animProgress.snapTo(0f)
+        animProgress.animateTo(1f, tween(animDurationMs, easing = androidx.compose.animation.core.FastOutSlowInEasing))
+    }
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -81,10 +84,16 @@ fun DonutChart(
             val arcTopLeft = Offset(strokeWidth / 2f, strokeWidth / 2f)
             val arcRect = Size(arcSize, arcSize)
 
+            // 顺时针从顶部展开：总角度 0→360
+            val totalSweep = 360f * animProgress.value
             var startAngle = -90f
+            var accumulated = 0f
 
             slices.forEach { slice ->
-                val sweep = (slice.value / total) * 360f * animProgress
+                val sliceFull = (slice.value / total) * 360f
+                // 当前切片在 totalSweep 中的占比
+                val sweep = if (accumulated + sliceFull <= totalSweep) sliceFull
+                else (totalSweep - accumulated).coerceAtLeast(0f)
                 drawArc(
                     color = slice.color,
                     startAngle = startAngle,
@@ -94,7 +103,8 @@ fun DonutChart(
                     size = arcRect,
                     style = Stroke(width = strokeWidth, cap = StrokeCap.Butt)
                 )
-                startAngle += (slice.value / total) * 360f
+                accumulated += sliceFull
+                startAngle += sliceFull
             }
 
             // 中心标签：总小时数

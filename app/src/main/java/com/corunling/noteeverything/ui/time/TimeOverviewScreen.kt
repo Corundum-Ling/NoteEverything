@@ -7,12 +7,18 @@
 
 package com.corunling.noteeverything.ui.time
 
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.*
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalView
+import kotlinx.coroutines.delay
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -22,6 +28,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -59,6 +66,7 @@ fun TimeOverviewScreen(
     val daysCount by viewModel.daysCount.collectAsState()
     val topSoftwareName by viewModel.topSoftwareName.collectAsState()
     val topSoftwareMinutes by viewModel.topSoftwareMinutes.collectAsState()
+    val animatedBarIds by viewModel.animatedBarIds.collectAsState()
     val softwareList by viewModel.softwareList.collectAsState()
     val filterState by viewModel.filterState.collectAsState()
     val showArrows by viewModel.showArrows.collectAsState()
@@ -112,12 +120,21 @@ fun TimeOverviewScreen(
             onFilterClick = { showFilterSheet = true }
         )
 
-        // ═══ 滚动内容 ═══
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        // ═══ 滚动内容（带 Tab 切换淡入淡出） ═══
+        val tabKey = "${selectedPeriod.ordinal}-$rangeStart-$rangeEnd"
+        AnimatedContent(
+            targetState = tabKey,
+            transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
+            label = "tabContent",
+            modifier = Modifier.weight(1f)
+        ) { _ ->
+            val listState = rememberLazyListState()
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
             // ── 摘要卡片（2×2） ──
             item {
                 SummaryCards(
@@ -129,93 +146,121 @@ fun TimeOverviewScreen(
                 )
             }
 
-            // ── 趋势图（卡片包裹） ──
+            // ── 趋势图（卡片包裹，1/3 可见才触发动画） ──
             if (settings.showLineChart) {
                 item {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "时长趋势",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            LineChart(
-                                data = dailyTrends,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(200.dp)
-                            )
+                    var chartReady by remember { mutableStateOf(false) }
+                    VisibilityGate(onVisible = { chartReady = true }) {
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "时长趋势",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                key(chartReady) {
+                                    if (chartReady) {
+                                        LineChart(
+                                            data = dailyTrends,
+                                            modifier = Modifier.fillMaxWidth().height(200.dp)
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.fillMaxWidth().height(200.dp))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // ── 环形图分类分布（卡片包裹） ──
+            // ── 环形图分类分布（卡片包裹，1/3 可见才触发） ──
             if (settings.showDonutChart && categoryStats.isNotEmpty()) {
                 item {
-                    Card(
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface
-                        ),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(16.dp)) {
-                            Text(
-                                text = "分类分布",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(12.dp))
-                            DonutChart(
-                                slices = createCategorySlices(
-                                    categoryStats.associate { it.category to it.total }
-                                ),
-                                modifier = Modifier.fillMaxWidth()
-                            )
+                    var chartReady by remember { mutableStateOf(false) }
+                    VisibilityGate(onVisible = { chartReady = true }) {
+                        Card(
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp)) {
+                                Text(
+                                    text = "分类分布",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                key(chartReady) {
+                                    if (chartReady) {
+                                        DonutChart(
+                                            slices = createCategorySlices(categoryStats.associate { it.category to it.total }),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    } else {
+                                        Spacer(modifier = Modifier.fillMaxWidth().height(140.dp))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // ── 软件排行 ──
+            // ── 软件排行（一张统一卡片，滚动到可见才触发） ──
             if (settings.showRanking && rankingStats.isNotEmpty()) {
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "软件排行",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Text(
-                            text = "${rankingStats.size} 个软件",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                item(key = "ranking") {
+                    val rankingVisible by remember {
+                        derivedStateOf {
+                            listState.layoutInfo.visibleItemsInfo.any { it.key == "ranking" }
+                        }
                     }
-                }
-
-                items(rankingStats) { stat ->
-                    val rank = rankingStats.indexOf(stat) + 1
-                    StatRow(
-                        repository = repository,
-                        stat = stat,
-                        rank = rank,
-                        maxMinutes = rankingStats.firstOrNull()?.total ?: 1L
-                    )
+                    var cardsReady by remember { mutableStateOf(false) }
+                    LaunchedEffect(rankingVisible) {
+                        if (rankingVisible) cardsReady = true
+                    }
+                    Card(
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "软件排行",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text(
+                                    text = "${rankingStats.size} 个软件",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(8.dp))
+                            rankingStats.forEachIndexed { index, stat ->
+                                val rank = index + 1
+                                StatRow(
+                                    repository = repository,
+                                    stat = stat,
+                                    rank = rank,
+                                    maxMinutes = rankingStats.firstOrNull()?.total ?: 1L,
+                                    ready = cardsReady,
+                                    hasAnimated = stat.softwareId in animatedBarIds,
+                                    onAnimationPlayed = { viewModel.markBarAnimated(stat.softwareId) }
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
@@ -248,6 +293,7 @@ fun TimeOverviewScreen(
             // 底部留白
             item { Spacer(modifier = Modifier.height(16.dp)) }
         }
+    }
     }
 
     // ── BottomSheet：日/周/月选择器 ──
@@ -425,10 +471,7 @@ private fun SummaryCards(
             )
             SummaryCard(
                 label = "最多软件",
-                value = if (topSoftwareName.isNotEmpty()) {
-                    "$topSoftwareName"
-                } else "—",
-                subtitle = if (topSoftwareMinutes > 0) DateTimeUtils.formatDuration(topSoftwareMinutes) else null,
+                value = if (topSoftwareName.isNotEmpty()) "$topSoftwareName" else "—",
                 color = MaterialTheme.colorScheme.error
             )
         }
@@ -478,6 +521,32 @@ private fun SummaryCard(
 }
 
 // ═══════════════════════════════════════════════
+// 可见性触发器（卡片 ≈1/3 进入视口才触发 onVisible）
+// ═══════════════════════════════════════════════
+
+@Composable
+private fun VisibilityGate(
+    visibleFraction: Float = 0.33f,
+    onVisible: () -> Unit,
+    content: @Composable () -> Unit
+) {
+    val view = LocalView.current
+    var triggered by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier.onGloballyPositioned { coords ->
+            if (triggered || !coords.isAttached) return@onGloballyPositioned
+            val posY = coords.localToRoot(Offset.Zero).y
+            val cardHeight = coords.size.height
+            val windowHeight = view.height
+            if (posY + cardHeight * (1f - visibleFraction) <= windowHeight) {
+                triggered = true
+                onVisible()
+            }
+        }
+    ) { content() }
+}
+
+// ═══════════════════════════════════════════════
 // 排行行（保留原 StatRow 逻辑，优化 UI）
 // ═══════════════════════════════════════════════
 
@@ -486,7 +555,10 @@ fun StatRow(
     repository: NoteEverythingRepository,
     stat: SoftwareDuration,
     rank: Int,
-    maxMinutes: Long
+    maxMinutes: Long,
+    ready: Boolean = true,
+    hasAnimated: Boolean = false,
+    onAnimationPlayed: () -> Unit = {}
 ) {
     var softwareName by remember { mutableStateOf("加载中...") }
     var softwareCategory by remember { mutableStateOf("其他") }
@@ -497,21 +569,30 @@ fun StatRow(
         softwareCategory = sw?.category ?: "其他"
     }
 
-    val rankColor = when (rank) {
-        1 -> Color(0xFFFF9800)
-        2 -> Color(0xFF1A73E8)
-        3 -> Color(0xFF9C27B0)
-        else -> MaterialTheme.colorScheme.outline
-    }
-
-    val progress = if (maxMinutes > 0) stat.total.toFloat() / maxMinutes else 0f
+    val rankColor = CategoryColors.forCategory(softwareCategory).primary
+    val targetProgress = if (maxMinutes > 0) stat.total.toFloat() / maxMinutes else 0f
     val barColor = CategoryColors.forCategory(softwareCategory).primary
+
+    // 色条动画：卡片 1/3 可见后才播放，已播过的不重播
+    var barStarted by remember { mutableStateOf(hasAnimated) }
+    LaunchedEffect(ready) {
+        if (ready && !hasAnimated) {
+            delay(rank * 80L)
+            barStarted = true
+            onAnimationPlayed()
+        }
+    }
+    val barAnim by animateFloatAsState(
+        targetValue = if (barStarted || hasAnimated) targetProgress else 0f,
+        animationSpec = tween(600),
+        label = "barAnim"
+    )
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp, vertical = 4.dp),
+                .padding(vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -546,7 +627,7 @@ fun StatRow(
         ) {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth(progress)
+                    .fillMaxWidth(barAnim)
                     .height(6.dp)
                     .clip(RoundedCornerShape(3.dp))
                     .background(barColor)

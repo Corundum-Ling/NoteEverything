@@ -1,5 +1,10 @@
 package com.corunling.noteeverything.ui.time
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -96,14 +101,20 @@ fun FilterSheet(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // ── 软件列表 ──
+            // ── 软件列表（分类切换时淡入淡出） ──
             val filtered = if (activatedCats.isEmpty()) softwareList
             else softwareList.filter { it.category in activatedCats }
+            val listKey = filtered.map { it.id }.joinToString(",")
 
-            LazyColumn(
-                modifier = Modifier.heightIn(max = 360.dp),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
+            AnimatedContent(
+                targetState = listKey,
+                transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) },
+                label = "filterList"
+            ) { _ ->
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 360.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                 items(filtered, key = { it.id }) { software ->
                     val checked = software.id in selectedIds
                     Row(
@@ -137,6 +148,7 @@ fun FilterSheet(
                         )
                     }
                 }
+            }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

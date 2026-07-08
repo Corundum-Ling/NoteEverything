@@ -66,14 +66,20 @@ class TimeViewModel(
     private val _filterState = MutableStateFlow(FilterState())
     val filterState: StateFlow<FilterState> = _filterState.asStateFlow()
 
+    // 已播放过入场的 ID（防止滚动重播）
+    private val _animatedBarIds = MutableStateFlow(setOf<Long>())
+    val animatedBarIds: StateFlow<Set<Long>> = _animatedBarIds.asStateFlow()
+    fun markBarAnimated(id: Long) { _animatedBarIds.value = _animatedBarIds.value + id }
+    fun resetAnimations() { _animatedBarIds.value = emptySet() }
+
     init {
         loadSoftwareList()
         applyPeriod(Period.TODAY)
     }
 
     fun selectPeriod(period: Period) {
-        // 保存当前 Tab 的日期范围
         saveCurrentRange()
+        resetAnimations()
         _selectedPeriod.value = period
         _showArrows.value = period != Period.CUSTOM
         applyPeriod(period)
@@ -94,21 +100,25 @@ class TimeViewModel(
     }
 
     fun navigateToDay(date: String) {
+        resetAnimations()
         _selectedPeriod.value = Period.TODAY
         setRange(Period.TODAY, date, date)
     }
 
     fun navigateToWeek(start: String, end: String) {
+        resetAnimations()
         _selectedPeriod.value = Period.WEEK
         setRange(Period.WEEK, start, end)
     }
 
     fun navigateToMonth(start: String, end: String) {
+        resetAnimations()
         _selectedPeriod.value = Period.MONTH
         setRange(Period.MONTH, start, end)
     }
 
     fun setCustomRange(start: String, end: String) {
+        resetAnimations()
         customStart = start; customEnd = end
         _selectedPeriod.value = Period.CUSTOM
         _showArrows.value = false
