@@ -22,6 +22,24 @@ data class SoftwareDuration(
     val total: Long
 )
 
+// 按天的时长聚合（用于趋势图）
+data class DailyDuration(
+    val date: String,
+    val total: Long
+)
+
+// 按小时的时长聚合（今日趋势图用）
+data class HourlyDuration(
+    val hour: Int,
+    val total: Long
+)
+
+// 按分类的时长聚合（用于环形图）
+data class CategoryDuration(
+    val category: String,
+    val total: Long
+)
+
 @Dao
 interface TimeRecordDao {
 
@@ -63,6 +81,38 @@ interface TimeRecordDao {
         ORDER BY total DESC
     """)
     suspend fun getStatsInRange(startDate: String, endDate: String): List<SoftwareDuration>
+
+    // 日期范围内的每日时长趋势（用于折线图）
+    @Query("""
+        SELECT date, SUM(durationMinutes) as total
+        FROM time_records
+        WHERE date BETWEEN :startDate AND :endDate
+        GROUP BY date
+        ORDER BY date ASC
+    """)
+    suspend fun getDailyStatsInRange(startDate: String, endDate: String): List<DailyDuration>
+
+    // 某天各小时的时长分布（今日趋势图用）
+    @Query("""
+        SELECT CAST(strftime('%H', startTime / 1000, 'unixepoch') AS INTEGER) as hour,
+               SUM(durationMinutes) as total
+        FROM time_records
+        WHERE date = :date
+        GROUP BY hour
+        ORDER BY hour ASC
+    """)
+    suspend fun getHourlyStats(date: String): List<HourlyDuration>
+
+    // 日期范围内的分类时长汇总（用于环形图）
+    @Query("""
+        SELECT s.category, SUM(t.durationMinutes) as total
+        FROM time_records t
+        INNER JOIN software s ON t.softwareId = s.id
+        WHERE t.date BETWEEN :startDate AND :endDate
+        GROUP BY s.category
+        ORDER BY total DESC
+    """)
+    suspend fun getCategoryStatsInRange(startDate: String, endDate: String): List<CategoryDuration>
 
     // 清空所有时长记录
     @Query("DELETE FROM time_records")

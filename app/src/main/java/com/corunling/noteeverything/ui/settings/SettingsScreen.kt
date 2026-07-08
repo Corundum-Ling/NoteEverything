@@ -136,7 +136,42 @@ fun SettingsScreen(
             }
 
             // ═══════════════════════════════════════
-            // 区域二：数据管理
+            // 区域二：统计图显示
+            // ═══════════════════════════════════════
+            Text(
+                text = "统计图显示",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold
+            )
+
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    SettingSwitch(
+                        label = "时长趋势图",
+                        description = "折线+面积图展示每日时长变化",
+                        checked = settings.showLineChart,
+                        onCheckedChange = { scope.launch { settingsManager.setShowLineChart(it) } }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingSwitch(
+                        label = "分类分布图",
+                        description = "环形图展示各分类占比",
+                        checked = settings.showDonutChart,
+                        onCheckedChange = { scope.launch { settingsManager.setShowDonutChart(it) } }
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+                    SettingSwitch(
+                        label = "软件排行",
+                        description = "各软件时长排行列表",
+                        checked = settings.showRanking,
+                        onCheckedChange = { scope.launch { settingsManager.setShowRanking(it) } }
+                    )
+                }
+            }
+
+            // ═══════════════════════════════════════
+            // 区域三：数据管理
             // ═══════════════════════════════════════
             Text(
                 text = "数据管理",
@@ -172,7 +207,7 @@ fun SettingsScreen(
             }
 
             // ═══════════════════════════════════════
-            // 区域三：关于
+            // 区域四：关于
             // ═══════════════════════════════════════
             Text(
                 text = "关于",
@@ -203,5 +238,34 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingSwitch(
+    label: String,
+    description: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Switch(
+            checked = checked,
+            onCheckedChange = onCheckedChange
+        )
     }
 }

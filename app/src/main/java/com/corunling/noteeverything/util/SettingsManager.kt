@@ -35,19 +35,28 @@ private val Context.dataStore: DataStore<Preferences> by preferencesDataStore(na
 
 /** 从 DataStore 反序列化得到的设置快照 */
 data class AppSettings(
-    val darkMode: Boolean = false
+    val darkMode: Boolean = false,
+    val showLineChart: Boolean = true,
+    val showDonutChart: Boolean = true,
+    val showRanking: Boolean = true
 )
 
 class SettingsManager(private val context: Context) {
 
     companion object {
         private val DARK_MODE_KEY = booleanPreferencesKey("dark_mode")
+        private val SHOW_LINE_CHART_KEY = booleanPreferencesKey("show_line_chart")
+        private val SHOW_DONUT_CHART_KEY = booleanPreferencesKey("show_donut_chart")
+        private val SHOW_RANKING_KEY = booleanPreferencesKey("show_ranking")
     }
 
     /** 设置流：收集此 Flow 以响应式监听设置变化 */
     val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { prefs ->
         AppSettings(
-            darkMode = prefs[DARK_MODE_KEY] ?: false
+            darkMode = prefs[DARK_MODE_KEY] ?: false,
+            showLineChart = prefs[SHOW_LINE_CHART_KEY] ?: true,
+            showDonutChart = prefs[SHOW_DONUT_CHART_KEY] ?: true,
+            showRanking = prefs[SHOW_RANKING_KEY] ?: true
         )
     }
 
@@ -55,6 +64,27 @@ class SettingsManager(private val context: Context) {
     suspend fun setDarkMode(enabled: Boolean) {
         context.dataStore.edit { prefs ->
             prefs[DARK_MODE_KEY] = enabled
+        }
+    }
+
+    /** 切换折线图显示 */
+    suspend fun setShowLineChart(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[SHOW_LINE_CHART_KEY] = enabled
+        }
+    }
+
+    /** 切换环形图显示 */
+    suspend fun setShowDonutChart(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[SHOW_DONUT_CHART_KEY] = enabled
+        }
+    }
+
+    /** 切换排行列表显示 */
+    suspend fun setShowRanking(enabled: Boolean) {
+        context.dataStore.edit { prefs ->
+            prefs[SHOW_RANKING_KEY] = enabled
         }
     }
 }

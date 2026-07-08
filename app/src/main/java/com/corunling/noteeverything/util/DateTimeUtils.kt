@@ -64,4 +64,26 @@ object DateTimeUtils {
         val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
         return sdf.format(cal.time)
     }
+
+    /** 昨天的日期 */
+    fun yesterday(): String {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_MONTH, -1)
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        return sdf.format(cal.time)
+    }
+
+    /** N 天前的日期 */
+    fun daysAgo(n: Int): String {
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.DAY_OF_MONTH, -n)
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        return sdf.format(cal.time)
+    }
+
+    /** 毫秒时间戳 → YYYY-MM-DD */
+    fun millisToDateStr(millis: Long): String {
+        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        return sdf.format(Date(millis))
+    }
 }

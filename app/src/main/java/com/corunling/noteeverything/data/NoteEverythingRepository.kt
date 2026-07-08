@@ -18,6 +18,9 @@ package com.corunling.noteeverything.data
 import com.corunling.noteeverything.data.dao.NoteDao
 import com.corunling.noteeverything.data.dao.NoteTimeRecordLinkDao
 import com.corunling.noteeverything.data.dao.SoftwareDao
+import com.corunling.noteeverything.data.dao.CategoryDuration
+import com.corunling.noteeverything.data.dao.DailyDuration
+import com.corunling.noteeverything.data.dao.HourlyDuration
 import com.corunling.noteeverything.data.dao.SoftwareDuration
 import com.corunling.noteeverything.data.dao.TimeRecordDao
 import com.corunling.noteeverything.data.entity.NoteEntity
@@ -168,6 +171,18 @@ class NoteEverythingRepository(
 
     suspend fun getStatsInRange(startDate: String, endDate: String): List<SoftwareDuration> =
         timeRecordDao.getStatsInRange(startDate, endDate)
+
+    /** 日期范围内的每日时长趋势 */
+    suspend fun getDailyStatsInRange(startDate: String, endDate: String): List<DailyDuration> =
+        timeRecordDao.getDailyStatsInRange(startDate, endDate)
+
+    /** 日期范围内的分类时长汇总 */
+    suspend fun getCategoryStatsInRange(startDate: String, endDate: String): List<CategoryDuration> =
+        timeRecordDao.getCategoryStatsInRange(startDate, endDate)
+
+    /** 某天各小时的时长分布 */
+    suspend fun getHourlyStats(date: String): List<HourlyDuration> =
+        timeRecordDao.getHourlyStats(date)
 
     // ════════════════════════════════════════════════
     // 笔记 ↔ 时长关联
