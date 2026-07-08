@@ -71,6 +71,10 @@ class TimeViewModel(
     val animatedBarIds: StateFlow<Set<Long>> = _animatedBarIds.asStateFlow()
     fun markBarAnimated(id: Long) { _animatedBarIds.value = _animatedBarIds.value + id }
 
+    // 版本号（筛选/切换时递增，驱动图表 LaunchedEffect 重启）
+    private val _dataVersion = MutableStateFlow(0)
+    val dataVersion: StateFlow<Int> = _dataVersion.asStateFlow()
+
     // 图表动画（同排行逻辑）
     private val _lineAnimated = MutableStateFlow(false)
     val lineAnimated: StateFlow<Boolean> = _lineAnimated.asStateFlow()
@@ -142,6 +146,7 @@ class TimeViewModel(
 
     fun applyFilter(filter: FilterState) {
         _filterState.value = filter
+        resetAnimations()
         applyPeriod(_selectedPeriod.value)
     }
 
@@ -194,13 +199,22 @@ class TimeViewModel(
             else rawRanking.filter { it.softwareId in filter.selectedSoftwareIds }
 
             if (_selectedPeriod.value == Period.TODAY) {
-                val rawHourly = repository.getHourlyStats(start)
+                val rawHourly = if (filter.selectedSoftwareIds.isEmpty()) {
+                    repository.getHourlyStats(start)
+                } else {
+                    repository.getHourlyStatsFiltered(start, filter.selectedSoftwareIds.toList())
+                }
                 val hourlyMap = rawHourly.associate { it.hour to it.total }
-                _dailyTrends.value = (0..23).map { h ->
+                val trend = (0..23).map { h ->
                     LineChartPoint(label = "${h}:00", value = (hourlyMap[h] ?: 0L).toFloat())
                 }
+                _dailyTrends.value = trend
             } else {
-                val rawDaily = repository.getDailyStatsInRange(start, end)
+                val rawDaily = if (filter.selectedSoftwareIds.isEmpty()) {
+                    repository.getDailyStatsInRange(start, end)
+                } else {
+                    repository.getDailyStatsInRangeFiltered(start, end, filter.selectedSoftwareIds.toList())
+                }
                 val dailyMap = rawDaily.associate { it.date to it.total }
                 _dailyTrends.value = fillDailyGaps(start, end, dailyMap)
             }
@@ -233,6 +247,7 @@ class TimeViewModel(
                 _topSoftwareName.value = ""
                 _topSoftwareMinutes.value = 0L
             }
+            _dataVersion.value++
         }
     }
 

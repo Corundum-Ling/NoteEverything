@@ -36,6 +36,7 @@ fun LineChart(
     fillColor: Color = Color(0xFF1A73E8).copy(alpha = 0.12f),
     animDurationMs: Int = 800,
     hasAnimated: Boolean = false,
+    animVersion: Int = 0,
     onAnimated: () -> Unit = {}
 ) {
     if (data.isEmpty()) return
@@ -43,12 +44,14 @@ fun LineChart(
     val textMeasurer = rememberTextMeasurer()
 
     val animProgress = remember { Animatable(if (hasAnimated) 1f else 0f) }
-    LaunchedEffect(data) {
+    LaunchedEffect(data, animVersion) {
         if (!hasAnimated && data.isNotEmpty()) {
             delay(80L)
             animProgress.snapTo(0f)
             animProgress.animateTo(1f, tween(animDurationMs, easing = androidx.compose.animation.core.FastOutSlowInEasing))
             onAnimated()
+        } else {
+            animProgress.snapTo(1f)
         }
     }
 

@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.corunling.noteeverything.util.DateTimeUtils
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -42,7 +43,7 @@ fun DateRangeSheet(
     onConfirm: (startDate: String, endDate: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
 
     // 自定义起止日期
@@ -161,8 +162,7 @@ fun DateRangeSheet(
             // ── 确定按钮 ──
             Button(
                 onClick = {
-                    onConfirm(customStart, customEnd)
-                    scope.launch { sheetState.hide() }
+                    scope.launch { delay(300); sheetState.hide(); onConfirm(customStart, customEnd) }
                 },
                 modifier = Modifier
                     .fillMaxWidth()

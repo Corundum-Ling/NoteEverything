@@ -19,6 +19,8 @@ import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +45,8 @@ fun PeriodPickerSheet(
     onSelect: (startDate: String, endDate: String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
     val cal = Calendar.getInstance()
     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     try { cal.time = sdf.parse(currentStart) ?: Date() } catch (_: Exception) {}
@@ -104,12 +107,12 @@ fun PeriodPickerSheet(
                 PickerMode.DAY -> DayCalendar(
                     year = selYear, month = selMonth,
                     selectedDate = currentStart,
-                    onSelect = { date -> onSelect(date, date); onDismiss() }
+                    onSelect = { date -> scope.launch { delay(300); sheetState.hide(); onSelect(date, date); onDismiss() } }
                 )
                 PickerMode.WEEK -> WeekGrid(
                     year = selYear, month = selMonth,
                     currentStart = currentStart, currentEnd = currentEnd,
-                    onSelect = { s, e -> onSelect(s, e); onDismiss() }
+                    onSelect = { s, e -> scope.launch { delay(300); sheetState.hide(); onSelect(s, e); onDismiss() } }
                 )
                 PickerMode.MONTH -> {
                     // 月模式标题已有箭头控制，内容直接用选中年的月网格
@@ -121,7 +124,7 @@ fun PeriodPickerSheet(
                             val start = sdf.format(c.time)
                             c.set(Calendar.DAY_OF_MONTH, c.getActualMaximum(Calendar.DAY_OF_MONTH))
                             val end = sdf.format(c.time)
-                            onSelect(start, end); onDismiss()
+                            scope.launch { delay(300); sheetState.hide(); onSelect(start, end); onDismiss() }
                         }
                     )
                 }
@@ -239,9 +242,12 @@ private fun MonthOverlaySheet(
     onYearClick: () -> Unit
 ) {
     var browseYear by remember(year) { mutableIntStateOf(year) }
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     ) {
         Column(
@@ -278,6 +284,9 @@ private fun MonthOverlaySheet(
             val currentYear = Calendar.getInstance().get(Calendar.YEAR)
             val currentMonth = Calendar.getInstance().get(Calendar.MONTH)
 
+            var localMonth by remember { mutableIntStateOf(selectedMonth) }
+            LaunchedEffect(selectedMonth) { localMonth = selectedMonth }
+
             LazyVerticalGrid(
                 columns = GridCells.Fixed(4),
                 modifier = Modifier.heightIn(min = 200.dp, max = 260.dp),
@@ -285,15 +294,15 @@ private fun MonthOverlaySheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items((0..11).toList(), key = { it }) { m ->
-                    val isSelected = browseYear == year && m == selectedMonth
+                    val isSel = browseYear == year && m == localMonth
                     val isCurrent = browseYear == currentYear && m == currentMonth
                     Surface(
                         modifier = Modifier
                             .aspectRatio(1.2f)
-                            .clickable { onSelect(browseYear, m) },
+                            .clickable { localMonth = m; scope.launch { delay(300); sheetState.hide(); onSelect(browseYear, m); onDismiss() } },
                         shape = RoundedCornerShape(12.dp),
                         color = when {
-                            isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            isSel -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                             isCurrent -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                             else -> MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
                         }
@@ -302,7 +311,7 @@ private fun MonthOverlaySheet(
                             Text(
                                 text = "${m + 1}月",
                                 style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
                             )
                         }
                     }
@@ -327,8 +336,12 @@ private fun YearOverlaySheet(
         mutableIntStateOf((selectedYear / 10) * 10)
     }
 
+    val sheetState = rememberModalBottomSheetState()
+    val scope = rememberCoroutineScope()
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp)
     ) {
         Column(
@@ -359,6 +372,9 @@ private fun YearOverlaySheet(
 
             Spacer(Modifier.height(12.dp))
 
+            var localYear by remember { mutableIntStateOf(selectedYear) }
+            LaunchedEffect(selectedYear) { localYear = selectedYear }
+
             val years = (decadeStart..decadeStart + 9).toList()
 
             LazyVerticalGrid(
@@ -368,20 +384,20 @@ private fun YearOverlaySheet(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(years, key = { it }) { year ->
-                    val isSelected = year == selectedYear
+                    val isSel = year == localYear
                     Surface(
                         modifier = Modifier
                             .heightIn(min = 60.dp)
-                            .clickable { onSelect(year) },
+                            .clickable { localYear = year; scope.launch { delay(300); sheetState.hide(); onSelect(year); onDismiss() } },
                         shape = RoundedCornerShape(12.dp),
-                        color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        color = if (isSel) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "${year}年",
                                 style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                fontWeight = if (isSel) FontWeight.Bold else FontWeight.Normal
                             )
                         }
                     }
@@ -417,6 +433,9 @@ private fun DayCalendar(
 
         val todayStr = DateTimeUtils.today()
         val days = remember(year, month) { generateCalendarDays(year, month) }
+        // 本地选中状态：点击立即更新，让用户看到高亮变化
+        var localSelected by remember { mutableStateOf(selectedDate) }
+        LaunchedEffect(selectedDate) { localSelected = selectedDate }
 
         LazyVerticalGrid(
             columns = GridCells.Fixed(7),
@@ -427,20 +446,20 @@ private fun DayCalendar(
             items(days, key = { it.key }) { day ->
                 if (day.isEmpty) Box(modifier = Modifier.aspectRatio(1f))
                 else {
-                    val isSelected = day.dateStr == selectedDate
+                    val isSelected = day.dateStr == localSelected
                     val isToday = day.dateStr == todayStr
                     Surface(
-                        modifier = Modifier.aspectRatio(1f).clickable { onSelect(day.dateStr!!) },
+                        modifier = Modifier.aspectRatio(1f).clickable { localSelected = day.dateStr!!; onSelect(day.dateStr!!) },
                         shape = RoundedCornerShape(8.dp),
                         color = when {
-                            isSelected || isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                             else -> MaterialTheme.colorScheme.surface
                         }
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 text = "${day.dayNum}", style = MaterialTheme.typography.bodySmall,
-                                fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Normal,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
@@ -483,6 +502,8 @@ private fun WeekGrid(
     val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
     val today = Calendar.getInstance()
     val weeks = remember(year, month) { generateWeeks(year, month) }
+    var localSelStart by remember { mutableStateOf(currentStart) }
+    LaunchedEffect(currentStart) { localSelStart = currentStart }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -491,12 +512,12 @@ private fun WeekGrid(
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         items(weeks, key = { it.label }) { week ->
-            val isSel = week.start == currentStart
+            val isSel = week.start == localSelStart
             val isThisWeek = week.start <= sdf.format(today.time) && week.end >= sdf.format(today.time)
             Surface(
                 modifier = Modifier
                     .heightIn(min = 56.dp)
-                    .clickable { onSelect(week.start, week.end) },
+                    .clickable { localSelStart = week.start; onSelect(week.start, week.end) },
                 shape = RoundedCornerShape(12.dp),
                 color = if (isSel) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
@@ -506,7 +527,7 @@ private fun WeekGrid(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = if (isThisWeek) "本周" else week.label,
+                        text = week.label,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = if (isSel) FontWeight.Bold else FontWeight.Medium
                         )

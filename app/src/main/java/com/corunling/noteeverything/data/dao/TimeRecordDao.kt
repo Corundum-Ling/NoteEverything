@@ -103,6 +103,31 @@ interface TimeRecordDao {
     """)
     suspend fun getHourlyStats(date: String): List<HourlyDuration>
 
+    // 按软件筛选后的每日时长趋势
+    @Query("""
+        SELECT date, SUM(durationMinutes) as total
+        FROM time_records
+        WHERE date BETWEEN :startDate AND :endDate
+        AND softwareId IN (:softwareIds)
+        GROUP BY date
+        ORDER BY date ASC
+    """)
+    suspend fun getDailyStatsInRangeFiltered(
+        startDate: String, endDate: String,
+        softwareIds: List<Long>
+    ): List<DailyDuration>
+
+    // 按软件筛选后的各小时时长分布
+    @Query("""
+        SELECT CAST(strftime('%H', startTime / 1000, 'unixepoch') AS INTEGER) as hour,
+               SUM(durationMinutes) as total
+        FROM time_records
+        WHERE date = :date AND softwareId IN (:softwareIds)
+        GROUP BY hour
+        ORDER BY hour ASC
+    """)
+    suspend fun getHourlyStatsFiltered(date: String, softwareIds: List<Long>): List<HourlyDuration>
+
     // 日期范围内的分类时长汇总（用于环形图）
     @Query("""
         SELECT s.category, SUM(t.durationMinutes) as total

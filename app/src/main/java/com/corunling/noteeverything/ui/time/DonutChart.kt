@@ -58,6 +58,7 @@ fun DonutChart(
     modifier: Modifier = Modifier,
     animDurationMs: Int = 800,
     hasAnimated: Boolean = false,
+    animVersion: Int = 0,
     onAnimated: () -> Unit = {}
 ) {
     if (slices.isEmpty()) return
@@ -67,12 +68,14 @@ fun DonutChart(
     val primaryColor = MaterialTheme.colorScheme.primary
 
     val animProgress = remember { Animatable(if (hasAnimated) 1f else 0f) }
-    LaunchedEffect(slices) {
+    LaunchedEffect(slices, animVersion) {
         if (!hasAnimated && slices.isNotEmpty()) {
             delay(300L)
             animProgress.snapTo(0f)
             animProgress.animateTo(1f, tween(animDurationMs, easing = androidx.compose.animation.core.FastOutSlowInEasing))
             onAnimated()
+        } else {
+            animProgress.snapTo(1f)
         }
     }
 

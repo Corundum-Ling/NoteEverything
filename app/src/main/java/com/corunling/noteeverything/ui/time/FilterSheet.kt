@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.corunling.noteeverything.data.entity.SoftwareEntity
 import com.corunling.noteeverything.ui.theme.CategoryColors
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 data class FilterState(
@@ -35,7 +36,7 @@ fun FilterSheet(
     onApply: (FilterState) -> Unit,
     onDismiss: () -> Unit
 ) {
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetState = rememberModalBottomSheetState()
     val scope = rememberCoroutineScope()
 
     val allCategories = remember(softwareList) {
@@ -112,7 +113,7 @@ fun FilterSheet(
                 label = "filterList"
             ) { _ ->
                 LazyColumn(
-                    modifier = Modifier.heightIn(max = 360.dp),
+                    modifier = Modifier.height(180.dp),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                 items(filtered, key = { it.id }) { software ->
@@ -155,8 +156,7 @@ fun FilterSheet(
 
             Button(
                 onClick = {
-                    onApply(FilterState(selectedSoftwareIds = selectedIds, selectedCategories = activatedCats))
-                    scope.launch { sheetState.hide() }
+                    scope.launch { delay(300); sheetState.hide(); onApply(FilterState(selectedSoftwareIds = selectedIds, selectedCategories = activatedCats)) }
                 },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(12.dp)

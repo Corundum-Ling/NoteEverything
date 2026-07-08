@@ -69,6 +69,7 @@ fun TimeOverviewScreen(
     val animatedBarIds by viewModel.animatedBarIds.collectAsState()
     val lineAnimated by viewModel.lineAnimated.collectAsState()
     val donutAnimated by viewModel.donutAnimated.collectAsState()
+    val dataVersion by viewModel.dataVersion.collectAsState()
     val softwareList by viewModel.softwareList.collectAsState()
     val filterState by viewModel.filterState.collectAsState()
     val showArrows by viewModel.showArrows.collectAsState()
@@ -126,7 +127,7 @@ fun TimeOverviewScreen(
         val tabKey = "${selectedPeriod.ordinal}-$rangeStart-$rangeEnd"
         AnimatedContent(
             targetState = tabKey,
-            transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
+            transitionSpec = { fadeIn(tween(150)) togetherWith fadeOut(tween(80)) },
             label = "tabContent",
             modifier = Modifier.weight(1f)
         ) { _ ->
@@ -171,6 +172,7 @@ fun TimeOverviewScreen(
                                             data = dailyTrends,
                                             modifier = Modifier.fillMaxWidth().height(200.dp),
                                             hasAnimated = lineAnimated,
+                                            animVersion = dataVersion,
                                             onAnimated = { viewModel.markLineAnimated() }
                                         )
                                     } else {
@@ -206,6 +208,7 @@ fun TimeOverviewScreen(
                                             slices = createCategorySlices(categoryStats.associate { it.category to it.total }),
                                             modifier = Modifier.fillMaxWidth(),
                                             hasAnimated = donutAnimated,
+                                            animVersion = dataVersion,
                                             onAnimated = { viewModel.markDonutAnimated() }
                                         )
                                     } else {

@@ -184,6 +184,14 @@ class NoteEverythingRepository(
     suspend fun getHourlyStats(date: String): List<HourlyDuration> =
         timeRecordDao.getHourlyStats(date)
 
+    suspend fun getDailyStatsInRangeFiltered(
+        startDate: String, endDate: String,
+        softwareIds: List<Long>
+    ): List<DailyDuration> = timeRecordDao.getDailyStatsInRangeFiltered(startDate, endDate, softwareIds)
+
+    suspend fun getHourlyStatsFiltered(date: String, softwareIds: List<Long>): List<HourlyDuration> =
+        timeRecordDao.getHourlyStatsFiltered(date, softwareIds)
+
     // ════════════════════════════════════════════════
     // 笔记 ↔ 时长关联
     // ════════════════════════════════════════════════
